@@ -1,0 +1,637 @@
+/* =====================================================
+   MÓDULO MODELOS — CSS
+   Archivo: Views/css/Modelos.css
+   Compatible con el sistema liquid-glass del proyecto
+   ===================================================== */
+
+/* ─── OVERLAY ─── */
+#modelosOverlay {
+    z-index: 46000;
+}
+
+/* ─── MODAL PRINCIPAL ─── */
+.md-modal {
+    animation: mdModalIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+    will-change: transform, opacity;
+}
+
+@keyframes mdModalIn {
+    from {
+        opacity: 0;
+        transform: scale(0.93) translateY(18px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* ─── HEADER ─── */
+.md-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 22px 24px 18px;
+    background: rgba(139, 92, 246, 0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    flex-shrink: 0;
+}
+
+.md-header-logo {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.18), rgba(99, 102, 241, 0.08));
+    border: 1px solid rgba(139, 92, 246, 0.30);
+    box-shadow: 0 0 18px rgba(139, 92, 246, 0.15), inset 0 0 10px rgba(139, 92, 246, 0.06);
+    flex-shrink: 0;
+}
+
+.md-title {
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    color: var(--color);
+    line-height: 1;
+}
+
+.md-title-accent {
+    background: linear-gradient(90deg, #a78bfa, #818cf8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.md-subtitle {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 800;
+    opacity: 0.35;
+    margin-top: 3px;
+}
+
+.md-close-btn {
+    margin-left: auto;
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--color);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.md-close-btn:hover {
+    background: rgba(239, 68, 68, 0.18);
+    color: #f87171;
+    border-color: rgba(239, 68, 68, 0.35);
+}
+
+/* ─── BODY ─── */
+.md-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 24px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+/* ─── SECCIÓN ─── */
+.md-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.md-section-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 9px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--color);
+    opacity: 0.5;
+}
+
+.md-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.md-dot-violet {
+    background: #a78bfa;
+    box-shadow: 0 0 8px rgba(167, 139, 250, 0.7);
+}
+
+/* ─── IMEI BAR ─── */
+.md-imei-bar {
+    height: 52px;
+    padding: 0 14px;
+    margin: 0;
+    background: rgba(0, 0, 0, 0.35);
+    border-color: rgba(255, 255, 255, 0.08);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.md-imei-bar:focus-within {
+    border-color: rgba(167, 139, 250, 0.45) !important;
+    box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.08);
+}
+
+[data-theme="light"] .md-imei-bar {
+    background: rgba(255, 255, 255, 0.6);
+}
+
+/* ─── BOTONES DE ACCIÓN (3 opciones) ─── */
+.md-actions-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+}
+
+.md-action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px 10px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.md-action-btn::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: currentColor;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+}
+
+.md-action-btn:hover::before {
+    opacity: 0.06;
+}
+
+.md-action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.md-action-btn:active {
+    transform: translateY(0);
+}
+
+/* Variante Modelo (violeta/cian) */
+.md-action-btn.md-btn-modelo {
+    border-color: rgba(167, 139, 250, 0.30);
+    color: #a78bfa;
+}
+
+.md-action-btn.md-btn-modelo:hover {
+    border-color: rgba(167, 139, 250, 0.60);
+    background: rgba(167, 139, 250, 0.10);
+    box-shadow: 0 8px 24px rgba(167, 139, 250, 0.20);
+}
+
+/* Variante IMEI Colombia (cian) */
+.md-action-btn.md-btn-colombia {
+    border-color: rgba(34, 211, 238, 0.30);
+    color: #22d3ee;
+}
+
+.md-action-btn.md-btn-colombia:hover {
+    border-color: rgba(34, 211, 238, 0.60);
+    background: rgba(34, 211, 238, 0.08);
+    box-shadow: 0 8px 24px rgba(34, 211, 238, 0.18);
+}
+
+/* Variante Blacklist (gris, disabled) */
+.md-action-btn.md-btn-blacklist {
+    border-color: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.25);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.md-action-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: currentColor;
+    background: rgba(currentColor, 0.08);
+    transition: all 0.22s;
+}
+
+.md-btn-modelo .md-action-icon {
+    background: rgba(167, 139, 250, 0.12);
+    border: 1px solid rgba(167, 139, 250, 0.22);
+}
+
+.md-btn-colombia .md-action-icon {
+    background: rgba(34, 211, 238, 0.10);
+    border: 1px solid rgba(34, 211, 238, 0.20);
+}
+
+.md-btn-blacklist .md-action-icon {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.md-action-label {
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-align: center;
+    line-height: 1.2;
+}
+
+/* Badge "Próximamente" */
+.md-soon-badge {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    padding: 2px 7px;
+    border-radius: 99px;
+    font-size: 7px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* ─── ÁREA DE RESULTADOS ─── */
+.md-result-area {
+    border-radius: 16px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    padding: 14px 16px;
+    min-height: 56px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    animation: mdFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes mdFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.md-result-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.md-result-icon.md-icon-success {
+    background: rgba(167, 139, 250, 0.14);
+    border: 1px solid rgba(167, 139, 250, 0.28);
+    color: #a78bfa;
+}
+
+.md-result-icon.md-icon-colombia {
+    background: rgba(34, 211, 238, 0.12);
+    border: 1px solid rgba(34, 211, 238, 0.25);
+    color: #22d3ee;
+}
+
+.md-result-icon.md-icon-error {
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    color: #f87171;
+}
+
+.md-result-icon.md-icon-loading {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--color-sec);
+}
+
+.md-result-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.md-result-label {
+    font-size: 9px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.10em;
+    opacity: 0.45;
+}
+
+.md-result-value {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--color);
+    letter-spacing: -0.01em;
+    word-break: break-word;
+}
+
+.md-result-meta {
+    display: flex;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.md-result-meta-item {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--color-sec);
+    opacity: 0.7;
+}
+
+.md-result-meta-item span {
+    font-weight: 800;
+    opacity: 1;
+}
+
+/* ─── SCREENSHOT THUMBNAIL ─── */
+.md-screenshot-area {
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.3);
+    position: relative;
+    cursor: pointer;
+    transition: all 0.22s;
+    max-height: 180px;
+}
+
+.md-screenshot-area:hover {
+    border-color: rgba(167, 139, 250, 0.40);
+    box-shadow: 0 4px 20px rgba(167, 139, 250, 0.15);
+}
+
+.md-screenshot-area img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    max-height: 178px;
+}
+
+.md-screenshot-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.md-screenshot-area:hover .md-screenshot-overlay {
+    opacity: 1;
+}
+
+.md-screenshot-overlay span {
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.10em;
+    color: rgba(255, 255, 255, 0.85);
+    background: rgba(0, 0, 0, 0.6);
+    padding: 6px 14px;
+    border-radius: 99px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* ─── LIGHTBOX ─── */
+#mdLightboxOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: rgba(0, 0, 0, 0.88);
+    backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: mdFadeIn 0.2s ease;
+    cursor: zoom-out;
+}
+
+#mdLightboxOverlay img {
+    max-width: 90vw;
+    max-height: 88vh;
+    object-fit: contain;
+    border-radius: 12px;
+    box-shadow: 0 0 60px rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+}
+
+/* ─── FOOTER / CUPOS ─── */
+.md-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 24px 16px;
+    background: rgba(255, 255, 255, 0.02);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
+}
+
+.md-cupos-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.md-cupos-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: all 0.4s;
+}
+
+.md-cupos-dot.disponible {
+    background: #4ade80;
+    box-shadow: 0 0 10px rgba(74, 222, 128, 0.6);
+    animation: mdCuposPulse 2s ease-in-out infinite;
+}
+
+.md-cupos-dot.agotado {
+    background: #f87171;
+    box-shadow: 0 0 10px rgba(248, 113, 113, 0.6);
+}
+
+.md-cupos-dot.advertencia {
+    background: #fbbf24;
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.6);
+}
+
+@keyframes mdCuposPulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
+    }
+
+    50% {
+        box-shadow: 0 0 16px rgba(74, 222, 128, 0.9);
+    }
+}
+
+.md-cupos-text {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-sec);
+    opacity: 0.8;
+}
+
+.md-cupos-count {
+    font-weight: 900;
+    color: var(--color);
+}
+
+/* ─── BOTONES FOOTER ─── */
+.md-btn-cancel {
+    height: 38px;
+    padding: 0 16px;
+    border-radius: 11px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--color);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.md-btn-cancel:hover {
+    background: rgba(255, 255, 255, 0.09);
+}
+
+/* ─── ESTADOS DE CARGA ─── */
+.md-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    border-top-color: #a78bfa;
+    border-radius: 50%;
+    animation: mdSpin 0.7s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes mdSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ─── INDICADOR DE CUPOS EN DOCK (junto al dock) ─── */
+#mdDockCuposIndicator {
+    position: fixed;
+    bottom: 82px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 40000;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px 4px 8px;
+    border-radius: 99px;
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--color-sec);
+    pointer-events: none;
+    transition: all 0.4s;
+    opacity: 0;
+}
+
+#mdDockCuposIndicator.visible {
+    opacity: 1;
+}
+
+#mdDockCuposIndicator .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+}
+
+[data-theme="light"] .md-imei-bar {
+    background: rgba(255, 255, 255, 0.88);
+    border-color: rgba(37, 99, 235, 0.18);
+}
+
+[data-theme="light"] .md-imei-bar:focus-within {
+    border-color: rgba(37, 99, 235, 0.50) !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10) !important;
+}
+
+[data-theme="light"] .md-header {
+    background: rgba(37, 99, 235, 0.04);
+    border-bottom-color: rgba(37, 99, 235, 0.12);
+}
+
+[data-theme="light"] .md-result-area {
+    background: rgba(255, 255, 255, 0.75);
+    border-color: rgba(37, 99, 235, 0.10);
+}
+
+[data-theme="light"] .md-close-btn {
+    background: rgba(255, 255, 255, 0.75) !important;
+    border-color: rgba(37, 99, 235, 0.14) !important;
+}
+
+[data-theme="light"] #mdDockCuposIndicator {
+    background: rgba(239, 246, 255, 0.96) !important;
+    border-color: rgba(37, 99, 235, 0.22) !important;
+    color: #0f172a !important;
+    box-shadow: 0 4px 15px rgba(37, 99, 235, 0.14), 0 0 10px rgba(37, 99, 235, 0.10) !important;
+}
+
+[data-theme="light"] .md-btn-submit {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+    border-color: #1d4ed8 !important;
+    color: #ffffff !important;
+}

@@ -1,0 +1,906 @@
+/* =====================================================
+   REGISTRO RÁPIDO ETB — CSS
+   Archivo: Views/css/registroRapido.css
+   ===================================================== */
+
+/* ─── MODAL PRINCIPAL ─── */
+#rrOverlay {
+    z-index: 45000;
+}
+
+.rr-modal {
+    animation: rrModalIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+    will-change: transform, opacity;
+    transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.45s ease;
+}
+
+@keyframes rrModalIn {
+    from {
+        opacity: 0;
+        transform: scale(0.93) translateY(18px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* ─── HEADER ─── */
+.rr-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 22px 24px 18px;
+    background: rgba(0, 243, 255, 0.03);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    flex-shrink: 0;
+}
+
+.rr-header-logo {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(0, 243, 255, 0.15), rgba(0, 180, 255, 0.05));
+    border: 1px solid rgba(0, 243, 255, 0.25);
+    box-shadow: 0 0 16px rgba(0, 243, 255, 0.12), inset 0 0 12px rgba(0, 243, 255, 0.06);
+    flex-shrink: 0;
+}
+
+.rr-title {
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    color: var(--color);
+    line-height: 1;
+}
+
+.rr-title-accent {
+    background: linear-gradient(90deg, #00f3ff, #67e8f9);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.rr-subtitle {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 800;
+    opacity: 0.35;
+    margin-top: 3px;
+}
+
+.rr-close-btn {
+    margin-left: auto;
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--color);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.rr-close-btn:hover {
+    background: rgba(239, 68, 68, 0.18);
+    color: #f87171;
+    border-color: rgba(239, 68, 68, 0.35);
+}
+
+/* ─── TABS ─── */
+.rr-tabs-wrapper {
+    flex: 1;
+    min-width: 0;
+}
+
+.rr-tabs {
+    position: relative;
+    display: flex;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 5px;
+    gap: 2px;
+}
+
+[data-theme="light"] .rr-tabs {
+    background: rgba(0, 180, 255, 0.05);
+    border-color: rgba(0, 180, 255, 0.12);
+}
+
+.rr-tab {
+    position: relative;
+    z-index: 2;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    color: var(--color);
+    opacity: 0.4;
+    background: transparent;
+    border: none;
+    transition: opacity 0.3s, color 0.3s, text-shadow 0.3s;
+    white-space: nowrap;
+}
+
+.rr-tab.rr-tab-active {
+    opacity: 1;
+    color: #00f3ff;
+    text-shadow: 0 0 8px rgba(0, 243, 255, 0.4);
+}
+
+.rr-tab-slider {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    height: calc(100% - 10px);
+    width: calc((100% - 16px) / 4);
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(0, 243, 255, 0.12), rgba(0, 180, 255, 0.06));
+    border: 1px solid rgba(0, 243, 255, 0.30);
+    box-shadow: 0 0 12px rgba(0, 243, 255, 0.15), inset 0 0 6px rgba(0, 243, 255, 0.06);
+    transition: transform 0.38s cubic-bezier(0.25, 1, 0.5, 1);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.rr-tab-slider.rr-slider-pos-0 {
+    transform: translateX(0);
+}
+
+.rr-tab-slider.rr-slider-pos-1 {
+    transform: translateX(calc(100% + 2px));
+}
+
+.rr-tab-slider.rr-slider-pos-2 {
+    transform: translateX(calc(200% + 4px));
+}
+
+.rr-tab-slider.rr-slider-pos-3 {
+    transform: translateX(calc(300% + 6px));
+}
+
+[data-theme="light"] .rr-tab-slider {
+    background: linear-gradient(135deg, rgba(0, 180, 255, 0.15), rgba(0, 140, 220, 0.08));
+    border-color: rgba(0, 180, 255, 0.40);
+    box-shadow: 0 0 12px rgba(0, 180, 255, 0.15);
+}
+
+[data-theme="light"] .rr-tab.rr-tab-active {
+    color: #0284c7;
+    text-shadow: none;
+}
+
+/* ─── BADGE OPCIONAL (Declaración Estándar) ─── */
+.rr-optional-badge {
+    display: inline-block;
+    font-size: 8px;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+    opacity: 0.5;
+    font-style: italic;
+    margin-left: 4px;
+}
+
+/* ─── DECLARACIÓN ESTÁNDAR — Preview ─── */
+.rr-estandar-preview {
+    padding: 14px 18px;
+    border-radius: 14px;
+    background: rgba(74, 222, 128, 0.06);
+    border: 1px solid rgba(74, 222, 128, 0.18);
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--color);
+    opacity: 0.85;
+    animation: rrFadeSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.rr-estandar-preview strong {
+    color: #4ade80;
+    font-weight: 800;
+}
+
+.rr-tab-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 99px;
+    font-size: 8px;
+    font-weight: 900;
+    background: rgba(168, 85, 247, 0.15);
+    border: 1px solid rgba(168, 85, 247, 0.35);
+    color: #c084fc;
+    letter-spacing: 0.05em;
+}
+
+/* ─── BODY / SCROLL ─── */
+.rr-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 24px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* ─── 2 COLUMNAS LAYOUT & DIVIDER ─── */
+.rr-grid-2col {
+    display: flex;
+    gap: 1.5rem;
+    align-items: stretch;
+}
+
+.rr-divider {
+    width: 1px;
+    align-self: stretch;
+    background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.12) 15%, rgba(255, 255, 255, 0.12) 85%, transparent);
+    flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+    .rr-grid-2col {
+        flex-direction: column;
+    }
+    .rr-divider {
+        display: none;
+    }
+}
+
+/* ─── SECCIÓN ─── */
+.rr-section {
+    display: flex;
+    flex-direction: column;
+    gap: 13px;
+    animation: rrSectionIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes rrSectionIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.rr-section-personalizada {
+    padding-top: 4px;
+    border-top: 1px solid rgba(168, 85, 247, 0.12);
+}
+
+.rr-section-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 9px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--color);
+    opacity: 0.5;
+}
+
+.rr-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.rr-dot-cyan {
+    background: #00f3ff;
+    box-shadow: 0 0 8px rgba(0, 243, 255, 0.7);
+}
+
+.rr-badge-pdf {
+    margin-left: auto;
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-size: 8px;
+    font-weight: 900;
+    background: rgba(168, 85, 247, 0.12);
+    border: 1px solid rgba(168, 85, 247, 0.30);
+    color: #c084fc;
+}
+
+/* ─── CAMPOS ─── */
+.rr-field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.rr-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color);
+    opacity: 0.55;
+}
+
+.rr-optional {
+    font-size: 9px;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+    opacity: 0.6;
+    font-style: italic;
+}
+
+.rr-required {
+    color: #f87171;
+    font-size: 9px;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.rr-input {
+    border-radius: 13px;
+    padding: 10px 14px;
+    font-size: 13px;
+}
+
+.rr-mono {
+    font-family: "SF Mono", "Fira Code", "Courier New", monospace;
+    letter-spacing: 0.12em;
+}
+
+.rr-select {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(255,255,255,0.4)' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+}
+
+[data-theme="light"] .rr-select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(0,0,0,0.3)' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+.rr-select option {
+    background: #0f172a;
+    color: #e2e8f0;
+}
+
+[data-theme="light"] .rr-select option {
+    background: #f8fafc;
+    color: #1e293b;
+}
+
+/* ─── GRID ─── */
+.rr-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.rr-grid-3 {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+}
+
+.rr-col-2 {
+    /* columna que toma el espacio restante */
+}
+
+/* ─── IMEI BAR ─── */
+.rr-imei-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.rr-imei-bar {
+    flex: 1;
+    min-width: 260px;
+    height: 52px;
+    padding: 0 14px;
+    margin: 0;
+    background: rgba(0, 0, 0, 0.35);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.rr-imei-bar:focus-within {
+    border-color: rgba(0, 243, 255, 0.45) !important;
+    box-shadow: 0 0 0 3px rgba(0, 243, 255, 0.08);
+}
+
+[data-theme="light"] .rr-imei-bar {
+    background: rgba(255, 255, 255, 0.6);
+}
+
+.rr-icon-btn {
+    padding: 6px;
+    border-radius: 10px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+
+.rr-icon-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.rr-consult-btn {
+    padding: 6px 12px;
+    background: rgba(0, 243, 255, 0.12);
+    color: #67e8f9;
+    border: 1px solid rgba(0, 243, 255, 0.25);
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: all 0.2s;
+}
+
+.rr-consult-btn:hover {
+    background: rgba(0, 243, 255, 0.22);
+    box-shadow: 0 0 12px rgba(0, 243, 255, 0.2);
+}
+
+.rr-modelo-result {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    background: rgba(103, 232, 249, 0.06);
+    border: 1px solid rgba(103, 232, 249, 0.18);
+    border-radius: 13px;
+    min-width: 160px;
+    animation: rrFadeSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes rrFadeSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* ─── LÍNEA DISPLAY ─── */
+.rr-linea-display {
+    flex: 1;
+    height: 48px;
+    border-radius: 13px;
+    background: rgba(0, 243, 255, 0.04);
+    border: 1px dashed rgba(0, 243, 255, 0.22);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    transition: all 0.3s;
+}
+
+.rr-linea-display.rr-linea-selected {
+    background: rgba(0, 243, 255, 0.09);
+    border-style: solid;
+    border-color: rgba(0, 243, 255, 0.4);
+    box-shadow: 0 0 14px rgba(0, 243, 255, 0.12);
+}
+
+.rr-linea-display .rr-linea-number {
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    color: #00f3ff;
+    text-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
+}
+
+.rr-btn-linea {
+    height: 48px;
+    padding: 0 18px;
+    border-radius: 13px;
+    background: rgba(0, 243, 255, 0.08);
+    border: 1px solid rgba(0, 243, 255, 0.22);
+    color: #67e8f9;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+    transition: all 0.22s;
+    flex-shrink: 0;
+}
+
+.rr-btn-linea:hover {
+    background: rgba(0, 243, 255, 0.16);
+    border-color: rgba(0, 243, 255, 0.45);
+    box-shadow: 0 0 16px rgba(0, 243, 255, 0.18);
+    transform: translateY(-1px);
+}
+
+/* ─── OPERADORES GRID ─── */
+.rr-operadores-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+
+.rr-op-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 4px 6px;
+    border-radius: 11px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    cursor: pointer;
+    transition: all 0.22s;
+}
+
+.rr-op-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateY(-1px);
+}
+
+.rr-op-btn.rr-op-active {
+    background: rgba(var(--op-rgb, 0, 243, 255), 0.12);
+    border-color: rgba(var(--op-rgb, 0, 243, 255), 0.40);
+    box-shadow: 0 0 12px rgba(var(--op-rgb, 0, 243, 255), 0.18);
+}
+
+.rr-op-btn img {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+}
+
+.rr-op-label {
+    font-size: 8px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color);
+    opacity: 0.55;
+}
+
+.rr-op-btn.rr-op-active .rr-op-label {
+    opacity: 1;
+}
+
+/* ─── FOOTER ─── */
+.rr-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 24px 18px;
+    background: rgba(255, 255, 255, 0.025);
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    flex-shrink: 0;
+}
+
+.rr-footer-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.rr-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.2);
+    transition: all 0.3s;
+}
+
+.rr-status-dot.ready {
+    background: #4ade80;
+    box-shadow: 0 0 8px rgba(74, 222, 128, 0.7);
+    animation: rrPulse 2s infinite;
+}
+
+.rr-status-dot.warning {
+    background: #fbbf24;
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.7);
+}
+
+@keyframes rrPulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 8px rgba(74, 222, 128, 0.7);
+    }
+
+    50% {
+        box-shadow: 0 0 16px rgba(74, 222, 128, 0.9);
+    }
+}
+
+.rr-status-text {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--color-sec);
+    opacity: 0.7;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rr-btn-cancel {
+    height: 42px;
+    padding: 0 18px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--color);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.rr-btn-cancel:hover {
+    background: rgba(255, 255, 255, 0.09);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.rr-btn-submit {
+    height: 42px;
+    padding: 0 22px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(0, 243, 255, 0.20), rgba(0, 180, 255, 0.15));
+    border: 1px solid rgba(0, 243, 255, 0.40);
+    color: #00f3ff;
+    font-size: 12px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+    transition: all 0.25s;
+}
+
+.rr-btn-submit:hover {
+    background: linear-gradient(135deg, rgba(0, 243, 255, 0.30), rgba(0, 180, 255, 0.22));
+    border-color: rgba(0, 243, 255, 0.65);
+    box-shadow: 0 0 20px rgba(0, 243, 255, 0.25);
+    transform: translateY(-1px);
+}
+
+.rr-btn-submit:active {
+    transform: scale(0.97);
+}
+
+.rr-btn-submit.rr-btn-loading {
+    pointer-events: none;
+    opacity: 0.65;
+}
+
+/* Glow pulsante cuando todo está listo */
+.rr-btn-glow.ready {
+    animation: rrBtnGlow 2.5s ease-in-out infinite;
+}
+
+@keyframes rrBtnGlow {
+
+    0%,
+    100% {
+        box-shadow: 0 0 12px rgba(0, 243, 255, 0.25);
+    }
+
+    50% {
+        box-shadow: 0 0 24px rgba(0, 243, 255, 0.55), 0 4px 20px rgba(0, 243, 255, 0.20);
+    }
+}
+
+/* ─── PANEL SELECTOR DE LÍNEAS ─── */
+#rrLineaSelectorOverlay {
+    z-index: 50000;
+}
+
+.rr-lineas-panel {
+    animation: rrModalIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.rr-linea-item {
+    width: 100%;
+    padding: 14px 16px;
+    border-radius: 13px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(0, 243, 255, 0.14);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.22s;
+}
+
+.rr-linea-item:hover {
+    background: rgba(0, 243, 255, 0.08);
+    border-color: rgba(0, 243, 255, 0.40);
+    box-shadow: 0 4px 14px rgba(0, 243, 255, 0.12);
+    transform: translateY(-1px);
+}
+
+.rr-linea-item-num {
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    color: var(--color);
+}
+
+.rr-linea-item-badge {
+    padding: 3px 10px;
+    border-radius: 99px;
+    font-size: 9px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+/* ─── ANIMACIÓN ENTRADA SECCIÓN PERSONALIZADA ─── */
+#rrSeccionPersonalizada.rr-section-entering {
+    animation: rrSectionIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ─── RESPONSIVE / LIGHT MODE EXTRAS ─── */
+[data-theme="light"] .rr-header {
+    background: rgba(37, 99, 235, 0.04);
+    border-bottom-color: rgba(37, 99, 235, 0.12);
+}
+
+[data-theme="light"] .rr-header-logo {
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.10), rgba(59, 130, 246, 0.06));
+    border-color: rgba(37, 99, 235, 0.28);
+}
+
+[data-theme="light"] .rr-imei-bar {
+    background: rgba(255, 255, 255, 0.82);
+    border-color: rgba(37, 99, 235, 0.18);
+}
+
+[data-theme="light"] .rr-consult-btn {
+    background: rgba(37, 99, 235, 0.08);
+    border-color: rgba(37, 99, 235, 0.28);
+    color: #1d4ed8;
+}
+
+[data-theme="light"] .rr-btn-linea {
+    background: rgba(37, 99, 235, 0.06);
+    border-color: rgba(37, 99, 235, 0.22);
+    color: #1d4ed8;
+}
+
+[data-theme="light"] .rr-btn-submit {
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.16), rgba(59, 130, 246, 0.10));
+    border-color: rgba(37, 99, 235, 0.45);
+    color: #1d4ed8;
+}
+
+[data-theme="light"] .rr-footer {
+    background: rgba(37, 99, 235, 0.025);
+    border-top-color: rgba(37, 99, 235, 0.10);
+}
+
+/* ─── POPOVER ANIMACIÓN ─── */
+@keyframes fadeInPop {
+    from {
+        opacity: 0;
+        transform: translateY(-6px) scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* ─── ANIMACIONES DE TRANSICIÓN: INDIVIDUAL & MASIVOS ─── */
+.rr-view-enter {
+    animation: rrViewEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+    will-change: transform, opacity, filter;
+}
+
+.rr-view-leave {
+    animation: rrViewLeave 0.20s cubic-bezier(0.16, 1, 0.3, 1) both;
+    will-change: transform, opacity, filter;
+}
+
+@keyframes rrViewEnter {
+    0% {
+        opacity: 0;
+        transform: scale(0.97) translateY(10px);
+        filter: blur(4px);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+        filter: blur(0);
+    }
+}
+
+@keyframes rrViewLeave {
+    0% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+        filter: blur(0);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(0.97) translateY(-8px);
+        filter: blur(3px);
+    }
+}
+
+/* Entrada escalonada de las dos columnas de masivos */
+#rrVistaMasivos.rr-view-enter > div:first-child {
+    animation: rrSlideRight 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+#rrVistaMasivos.rr-view-enter > div:last-child {
+    animation: rrSlideLeft 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes rrSlideRight {
+    0% {
+        opacity: 0;
+        transform: translateX(-14px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes rrSlideLeft {
+    0% {
+        opacity: 0;
+        transform: translateX(14px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}

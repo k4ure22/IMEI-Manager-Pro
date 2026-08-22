@@ -1,0 +1,786 @@
+/* =====================================================
+   MÓDULO CHECK — CSS
+   Archivo: Views/css/Check.css
+   Compatible con el sistema liquid-glass del proyecto
+   ===================================================== */
+
+/* ─── OVERLAY ─── */
+#checkOverlay {
+    z-index: 46000;
+}
+
+/* ─── MODAL PRINCIPAL ─── */
+.ck-modal {
+    animation: ckModalIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+    will-change: transform, opacity;
+}
+
+@keyframes ckModalIn {
+    from {
+        opacity: 0;
+        transform: scale(0.93) translateY(18px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* ─── HEADER ─── */
+.ck-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 22px 24px 18px;
+    background: rgba(139, 92, 246, 0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    flex-shrink: 0;
+}
+
+.ck-header-logo {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.18), rgba(99, 102, 241, 0.08));
+    border: 1px solid rgba(139, 92, 246, 0.30);
+    box-shadow: 0 0 18px rgba(139, 92, 246, 0.15), inset 0 0 10px rgba(139, 92, 246, 0.06);
+    flex-shrink: 0;
+}
+
+.ck-title {
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    color: var(--color);
+    line-height: 1;
+}
+
+.ck-title-accent {
+    background: linear-gradient(90deg, #a78bfa, #818cf8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.ck-subtitle {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 800;
+    opacity: 0.35;
+    margin-top: 3px;
+}
+
+.ck-close-btn {
+    margin-left: auto;
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--color);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.ck-close-btn:hover {
+    background: rgba(239, 68, 68, 0.18);
+    color: #f87171;
+    border-color: rgba(239, 68, 68, 0.35);
+}
+
+/* ─── BODY ─── */
+.ck-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 24px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+/* ─── SECCIÓN ─── */
+.ck-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ck-section-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 9px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--color);
+    opacity: 0.5;
+}
+
+.ck-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.ck-dot-violet {
+    background: #a78bfa;
+    box-shadow: 0 0 8px rgba(167, 139, 250, 0.7);
+}
+
+/* ─── IMEI BAR ─── */
+.ck-imei-bar {
+    height: 52px;
+    padding: 0 14px;
+    margin: 0;
+    background: rgba(0, 0, 0, 0.35);
+    border-color: rgba(255, 255, 255, 0.08);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.ck-imei-bar:focus-within {
+    border-color: rgba(167, 139, 250, 0.45) !important;
+    box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.08);
+}
+
+[data-theme="light"] .ck-imei-bar {
+    background: rgba(255, 255, 255, 0.6);
+}
+
+/* ─── BOTONES DE ACCIÓN (3 consultas estándar) ─── */
+.ck-actions-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+}
+
+.ck-action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px 10px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.ck-action-btn::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: currentColor;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+}
+
+.ck-action-btn:hover::before {
+    opacity: 0.06;
+}
+
+.ck-action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.ck-action-btn:active {
+    transform: translateY(0);
+}
+
+/* Variante Estándar (verde) */
+.ck-action-btn.ck-btn-estandar {
+    border-color: rgba(74, 222, 128, 0.30);
+    color: #4ade80;
+}
+
+.ck-action-btn.ck-btn-estandar:hover {
+    border-color: rgba(74, 222, 128, 0.60);
+    background: rgba(74, 222, 128, 0.08);
+    box-shadow: 0 8px 24px rgba(74, 222, 128, 0.18);
+}
+
+.ck-btn-estandar .ck-action-icon {
+    background: rgba(74, 222, 128, 0.12);
+    border: 1px solid rgba(74, 222, 128, 0.22);
+}
+
+/* Variante IMEI Colombia (cian) */
+.ck-action-btn.ck-btn-colombia {
+    border-color: rgba(34, 211, 238, 0.30);
+    color: #22d3ee;
+}
+
+.ck-action-btn.ck-btn-colombia:hover {
+    border-color: rgba(34, 211, 238, 0.60);
+    background: rgba(34, 211, 238, 0.08);
+    box-shadow: 0 8px 24px rgba(34, 211, 238, 0.18);
+}
+
+.ck-btn-colombia .ck-action-icon {
+    background: rgba(34, 211, 238, 0.10);
+    border: 1px solid rgba(34, 211, 238, 0.20);
+}
+
+/* Variante Blacklist (ACTIVO — rojo/naranja) */
+.ck-action-btn.ck-btn-blacklist {
+    border-color: rgba(251, 146, 60, 0.30);
+    color: #fb923c;
+}
+
+.ck-action-btn.ck-btn-blacklist:hover {
+    border-color: rgba(251, 146, 60, 0.60);
+    background: rgba(251, 146, 60, 0.08);
+    box-shadow: 0 8px 24px rgba(251, 146, 60, 0.18);
+}
+
+.ck-btn-blacklist .ck-action-icon {
+    background: rgba(251, 146, 60, 0.10);
+    border: 1px solid rgba(251, 146, 60, 0.20);
+}
+
+.ck-action-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.22s;
+}
+
+.ck-action-label {
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-align: center;
+    line-height: 1.2;
+}
+
+/* ─── BOTÓN CONSULTA PRO (ancho completo) ─── */
+.ck-pro-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ck-pro-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 16px 20px;
+    border-radius: 16px;
+    background: rgba(139, 92, 246, 0.06);
+    border: 1px solid rgba(139, 92, 246, 0.28);
+    color: #a78bfa;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+}
+
+.ck-pro-btn::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(99, 102, 241, 0.04));
+    opacity: 0;
+    transition: opacity 0.25s;
+    pointer-events: none;
+}
+
+.ck-pro-btn:hover::before {
+    opacity: 1;
+}
+
+.ck-pro-btn:hover {
+    transform: translateY(-2px);
+    border-color: rgba(139, 92, 246, 0.55);
+    box-shadow: 0 8px 32px rgba(139, 92, 246, 0.22), 0 0 0 1px rgba(139, 92, 246, 0.10);
+}
+
+.ck-pro-btn:active {
+    transform: translateY(0);
+}
+
+.ck-pro-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(139, 92, 246, 0.14);
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    flex-shrink: 0;
+}
+
+.ck-pro-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: left;
+}
+
+.ck-pro-label {
+    font-size: 12px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.ck-pro-sublabel {
+    font-size: 9px;
+    opacity: 0.5;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+}
+
+.ck-pro-badge {
+    margin-left: auto;
+    padding: 3px 10px;
+    border-radius: 99px;
+    font-size: 8px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    background: rgba(139, 92, 246, 0.15);
+    color: #c4b5fd;
+    border: 1px solid rgba(139, 92, 246, 0.25);
+}
+
+/* ─── INDICADOR DE CUPOS (bajo botón Pro) ─── */
+.ck-cupos-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 99px;
+    background: rgba(15, 23, 42, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(8px);
+}
+
+.ck-cupos-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: all 0.4s;
+}
+
+.ck-cupos-dot.disponible {
+    background: #4ade80;
+    box-shadow: 0 0 10px rgba(74, 222, 128, 0.6);
+    animation: ckCuposPulse 2s ease-in-out infinite;
+}
+
+.ck-cupos-dot.agotado {
+    background: #f87171;
+    box-shadow: 0 0 10px rgba(248, 113, 113, 0.6);
+}
+
+.ck-cupos-dot.advertencia {
+    background: #fbbf24;
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.6);
+}
+
+@keyframes ckCuposPulse {
+    0%, 100% {
+        box-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
+    }
+    50% {
+        box-shadow: 0 0 16px rgba(74, 222, 128, 0.9);
+    }
+}
+
+.ck-cupos-text {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--color-sec);
+    opacity: 0.8;
+}
+
+.ck-cupos-count {
+    font-weight: 900;
+    color: var(--color);
+}
+
+/* ─── SEPARADOR VISUAL ─── */
+.ck-separator {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+    margin: 4px 0;
+}
+
+/* ─── ÁREA DE RESULTADOS ─── */
+.ck-result-area {
+    border-radius: 16px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    padding: 14px 16px;
+    min-height: 56px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    animation: ckFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes ckFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.ck-result-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.ck-result-icon.ck-icon-success {
+    background: rgba(167, 139, 250, 0.14);
+    border: 1px solid rgba(167, 139, 250, 0.28);
+    color: #a78bfa;
+}
+
+.ck-result-icon.ck-icon-colombia {
+    background: rgba(34, 211, 238, 0.12);
+    border: 1px solid rgba(34, 211, 238, 0.25);
+    color: #22d3ee;
+}
+
+.ck-result-icon.ck-icon-blacklist {
+    background: rgba(251, 146, 60, 0.12);
+    border: 1px solid rgba(251, 146, 60, 0.25);
+    color: #fb923c;
+}
+
+.ck-result-icon.ck-icon-error {
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    color: #f87171;
+}
+
+.ck-result-icon.ck-icon-loading {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--color-sec);
+}
+
+.ck-result-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.ck-result-label {
+    font-size: 9px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.10em;
+    opacity: 0.45;
+}
+
+.ck-result-value {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--color);
+    letter-spacing: -0.01em;
+    word-break: break-word;
+}
+
+.ck-result-meta {
+    display: flex;
+    gap: 10px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+}
+
+.ck-result-meta-item {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--color-sec);
+    opacity: 0.7;
+}
+
+.ck-result-meta-item span {
+    font-weight: 800;
+    opacity: 1;
+}
+
+/* ─── SCREENSHOT THUMBNAIL ─── */
+.ck-screenshot-area {
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.3);
+    position: relative;
+    cursor: pointer;
+    transition: all 0.22s;
+    max-height: 220px;
+}
+
+.ck-screenshot-area:hover {
+    border-color: rgba(167, 139, 250, 0.40);
+    box-shadow: 0 4px 20px rgba(167, 139, 250, 0.15);
+}
+
+.ck-screenshot-area img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    max-height: 218px;
+}
+
+.ck-screenshot-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.ck-screenshot-area:hover .ck-screenshot-overlay {
+    opacity: 1;
+}
+
+.ck-screenshot-overlay span {
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.10em;
+    color: rgba(255, 255, 255, 0.85);
+    background: rgba(0, 0, 0, 0.6);
+    padding: 6px 14px;
+    border-radius: 99px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* ─── LIGHTBOX ─── */
+#ckLightboxOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: rgba(0, 0, 0, 0.88);
+    backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: ckFadeIn 0.2s ease;
+    cursor: zoom-out;
+}
+
+#ckLightboxOverlay img {
+    max-width: 90vw;
+    max-height: 88vh;
+    object-fit: contain;
+    border-radius: 12px;
+    box-shadow: 0 0 60px rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+}
+
+/* ─── FOOTER ─── */
+.ck-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 12px 24px 16px;
+    background: rgba(255, 255, 255, 0.02);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
+}
+
+.ck-btn-cancel {
+    height: 38px;
+    padding: 0 16px;
+    border-radius: 11px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--color);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.ck-btn-cancel:hover {
+    background: rgba(255, 255, 255, 0.09);
+}
+
+/* ─── ESTADOS DE CARGA ─── */
+.ck-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    border-top-color: #a78bfa;
+    border-radius: 50%;
+    animation: ckSpin 0.7s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes ckSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ─── INDICADOR DE CUPOS EN DOCK ─── */
+.ck-dock-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px 6px 10px;
+    border-radius: 99px;
+    background: rgba(7, 2, 13, 0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(167, 139, 250, 0.25);
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #cbd5e1;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4), 0 0 10px rgba(167, 139, 250, 0.15);
+    pointer-events: none;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity: 0;
+    transform: translateY(10px);
+}
+
+.ck-dock-indicator.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.ck-dock-indicator .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+}
+
+/* ─── BARCODE INDICATOR (ícono en campo IMEI) ─── */
+.ck-barcode-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.3;
+    margin-right: 4px;
+    flex-shrink: 0;
+}
+
+/* ─── TEMA CLARO ─── */
+[data-theme="light"] .ck-imei-bar {
+    background: rgba(255, 255, 255, 0.88);
+    border-color: rgba(37, 99, 235, 0.18);
+}
+
+[data-theme="light"] .ck-imei-bar:focus-within {
+    border-color: rgba(37, 99, 235, 0.50) !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10) !important;
+}
+
+[data-theme="light"] .ck-header {
+    background: rgba(37, 99, 235, 0.04);
+    border-bottom-color: rgba(37, 99, 235, 0.12);
+}
+
+[data-theme="light"] .ck-result-area {
+    background: rgba(255, 255, 255, 0.75);
+    border-color: rgba(37, 99, 235, 0.10);
+}
+
+[data-theme="light"] .ck-cupos-indicator {
+    background: rgba(255, 255, 255, 0.88);
+    border-color: rgba(37, 99, 235, 0.12);
+    color: #0f172a;
+}
+
+[data-theme="light"] .ck-pro-btn {
+    background: rgba(37, 99, 235, 0.06);
+    border-color: rgba(37, 99, 235, 0.20);
+    color: #1d4ed8;
+}
+
+[data-theme="light"] .ck-screenshot-area {
+    border-color: rgba(37, 99, 235, 0.12);
+    background: rgba(255, 255, 255, 0.60);
+}
+
+/* Dock indicator en modo claro */
+[data-theme="light"] .ck-dock-indicator {
+    background: rgba(239, 246, 255, 0.96) !important;
+    border-color: rgba(37, 99, 235, 0.22) !important;
+    color: #0f172a !important;
+    box-shadow: 0 4px 15px rgba(37, 99, 235, 0.14), 0 0 10px rgba(37, 99, 235, 0.10) !important;
+}
+
+/* Spinner en modo claro */
+[data-theme="light"] .ck-spinner {
+    border-color: rgba(37, 99, 235, 0.15) !important;
+    border-top-color: #2563eb !important;
+}
+
+/* Botón cerrar en modo claro */
+[data-theme="light"] .ck-close-btn {
+    background: rgba(255, 255, 255, 0.75) !important;
+    border-color: rgba(37, 99, 235, 0.14) !important;
+}
+
+/* Botones de acción grid en modo claro */
+[data-theme="light"] .ck-action-btn {
+    background: rgba(255, 255, 255, 0.80) !important;
+    border-color: rgba(37, 99, 235, 0.16) !important;
+    color: #1d4ed8 !important;
+}
+[data-theme="light"] .ck-action-btn:hover {
+    background: rgba(219, 234, 254, 0.88) !important;
+    border-color: rgba(37, 99, 235, 0.40) !important;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.14) !important;
+}
+
+/* Botón submit/guardar en modo claro */
+[data-theme="light"] .ck-btn-submit,
+[data-theme="light"] .ck-submit-btn {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+    border-color: #1d4ed8 !important;
+    color: #ffffff !important;
+}
+[data-theme="light"] .ck-btn-cancel {
+    background: rgba(255, 255, 255, 0.75) !important;
+    border-color: rgba(37, 99, 235, 0.16) !important;
+    color: #334155 !important;
+}

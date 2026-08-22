@@ -1,0 +1,56 @@
+name: Compilar IMEI Manager Pro para Windows
+
+on:
+  workflow_dispatch: # Botón manual en pestaña Actions de GitHub
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+
+jobs:
+  build-windows:
+    name: Build Windows Executable & Installer Setup
+    runs-on: windows-latest
+
+    steps:
+      - name: 📥 Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: 🐍 Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 📦 Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: 🚀 Compilar ejecutable con PyInstaller
+        run: |
+          pyinstaller "IMEI Manager Pro-win.spec" --clean --noconfirm
+
+      - name: 🛠️ Instalar Inno Setup
+        run: |
+          choco install innosetup --no-progress
+
+      - name: 💿 Compilar Instalador Setup (.exe)
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" installer_windows.iss
+
+      - name: 📤 Subir Instalador Setup (.exe) como Artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: Instalador_IMEI_Manager_Pro_Windows_Setup
+          path: dist_installer/*.exe
+          if-no-files-found: error
+
+      - name: 📤 Subir Carpeta Ejecutable Portable (.zip) como Artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: IMEI_Manager_Pro_Windows_Portable
+          path: dist/IMEI Manager Pro

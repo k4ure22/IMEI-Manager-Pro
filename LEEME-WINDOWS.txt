@@ -1,0 +1,69 @@
+============================================================
+  IMEI MANAGER PRO v2.0 - GUÍA DE COMPILACIÓN E INSTALACIÓN (WINDOWS)
+============================================================
+
+Tienes 2 opciones para generar el ejecutable (.exe) y el instalador Setup:
+
+────────────────────────────────────────────────────────────
+OPCIÓN 1: COMPILACIÓN AUTOMÁTICA EN GITHUB (RECOMENDADA) 🚀
+────────────────────────────────────────────────────────────
+No necesitas instalar Python ni Inno Setup en tu PC Windows. GitHub lo compila en la nube:
+
+1. Sube los cambios a tu repositorio de GitHub:
+     git add .
+     git commit -m "Compilar instalador Windows"
+     git push origin main
+
+2. En tu navegador entra a tu repositorio en GitHub:
+     https://github.com/k4ure22/IMEI-Manager-Pro
+
+3. Ve a la pestaña "Actions" arriba.
+4. En la barra lateral izquierda, selecciona "Compilar IMEI Manager Pro para Windows".
+5. Haz clic en el botón "Run workflow" -> "Run workflow" (verde).
+6. En 2-3 minutos el proceso terminará en verde (✅).
+7. Haz clic en la ejecución completada y en la sección inferior "Artifacts" descarga:
+   - "Instalador_IMEI_Manager_Pro_Windows_Setup": Contiene el instalador Setup .exe listo para instalar en cualquier Windows.
+   - "IMEI_Manager_Pro_Windows_Portable": Contiene la versión portable lista para usar.
+
+
+────────────────────────────────────────────────────────────
+OPCIÓN 2: COMPILAR DIRECTAMENTE EN TU PC CON WINDOWS 💻
+────────────────────────────────────────────────────────────
+
+REQUISITOS EN EL PC WINDOWS:
+  1. Windows 10 u 11 (64 bits).
+  2. Python 3.10 o superior (https://www.python.org/downloads/)
+     ⚠️ IMPORTANTE: Al instalar Python, marcar la casilla "Add Python to PATH".
+  3. (Opcional para el instalador Setup): Inno Setup 6
+     Instalar desde: https://jrsoftware.org/isdl.php
+     O por consola PowerShell: winget install JRSoftware.InnoSetup
+
+PASOS:
+  1. Copia toda la carpeta del proyecto a tu PC Windows.
+  2. Haz doble clic en "build_windows.bat".
+  
+  El script automáticamente:
+    ✓ Verificará Python y actualizará pip
+    ✓ Instalará dependencias de requirements.txt y pyinstaller
+    ✓ Compilará el ejecutable con PyInstaller
+    ✓ Si detecta Inno Setup, compilará automáticamente el instalador Setup
+
+RESULTADOS GENERADOS:
+  📁 Versión portable:
+     dist\IMEI Manager Pro\IMEI Manager Pro.exe
+
+  💿 Instalador Setup (.exe instalable):
+     dist_installer\Instalador_IMEI_Manager_Pro_v2.0_Setup.exe
+
+
+────────────────────────────────────────────────────────────
+PROGRAMAS COMPLEMENTARIOS EN EL PC FINAL
+────────────────────────────────────────────────────────────
+Para que todas las funciones operen al 100%:
+  1. Google Chrome (para Selenium / automatizaciones).
+  2. Microsoft Edge WebView2 (generalmente ya viene con Windows 10/11).
+  3. Tesseract OCR (solo si usas resolución OCR de captchas de operadores):
+     https://github.com/UB-Mannheim/tesseract/wiki
+     Instalar en: C:\Program Files\Tesseract-OCR\
+
+============================================================

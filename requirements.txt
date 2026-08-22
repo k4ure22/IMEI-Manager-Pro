@@ -1,0 +1,13 @@
+pywebview
+supabase
+openpyxl
+selenium
+webdriver-manager
+pytesseract
+opencv-python-headless
+Pillow
+fpdf2
+pypdf
+reportlab
+certifi
+xlwings

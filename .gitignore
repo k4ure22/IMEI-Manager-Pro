@@ -1,0 +1,37 @@
+# Python
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# Entornos virtuales
+venv/
+env/
+.venv/
+
+# Builds y compilaciones (en cualquier subdirectorio)
+**/build/
+**/dist/
+**/dist_installer/
+build/
+dist/
+dist_installer/
+*.spec.bak
+
+# Archivos de configuración y bases de datos locales
+*.sqlite3
+*.db
+.env
+.DS_Store
+*.icns
+*.dmg
+
+# Directorios de datos en runtime y temporales
+FilesIMP/
+**/temp_screenshots/
+temp_screenshots/
+Resultados_Masivos/
+scratch/
+
+# Logs
+logs/
+*.log
