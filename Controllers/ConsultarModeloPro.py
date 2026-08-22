@@ -1,8 +1,17 @@
 import sys
+import os
+
+if sys.platform == "win32":
+    if hasattr(sys.stdout, 'reconfigure'):
+        try: sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        except Exception: pass
+    if hasattr(sys.stderr, 'reconfigure'):
+        try: sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+        except Exception: pass
+
 import time
 import re
 import json
-import os
 import argparse
 from datetime import datetime, timedelta
 from selenium import webdriver

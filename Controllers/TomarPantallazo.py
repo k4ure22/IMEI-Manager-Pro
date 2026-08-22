@@ -1,7 +1,16 @@
 import sys
+import os
+
+if sys.platform == "win32":
+    if hasattr(sys.stdout, 'reconfigure'):
+        try: sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        except Exception: pass
+    if hasattr(sys.stderr, 'reconfigure'):
+        try: sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+        except Exception: pass
+
 import time
 import random
-import os
 import shutil
 import cv2
 import pytesseract
@@ -29,15 +38,20 @@ posibles_rutas = [
     '/usr/bin/tesseract',
     r'C:\Program Files\Tesseract-OCR\tesseract.exe',
     r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe',
+    r'C:\Tesseract-OCR\tesseract.exe',
 ]
 _local_appdata = os.environ.get('LOCALAPPDATA')
 if _local_appdata:
     posibles_rutas.append(os.path.join(_local_appdata, 'Tesseract-OCR', 'tesseract.exe'))
+    posibles_rutas.append(os.path.join(_local_appdata, 'Programs', 'Tesseract-OCR', 'tesseract.exe'))
+_user_profile = os.environ.get('USERPROFILE')
+if _user_profile:
+    posibles_rutas.append(os.path.join(_user_profile, 'AppData', 'Local', 'Programs', 'Tesseract-OCR', 'tesseract.exe'))
 ruta_tesseract = next((r for r in posibles_rutas if os.path.exists(r)), shutil.which('tesseract'))
 if ruta_tesseract:
     pytesseract.pytesseract.tesseract_cmd = ruta_tesseract
 else:
-    print("❌ ERROR: Tesseract no encontrado. Instálalo con 'brew install tesseract' en Mac o su instalador en Windows")
+    print("⚠️ AVISO: Tesseract no encontrado en rutas estándar. Si usas consultas de IMEI, instálalo en Windows (https://github.com/UB-Mannheim/tesseract/wiki) o en Mac ('brew install tesseract').")
 def generar_acronimo(texto):
     if not texto: return "DESC" 
     palabras = str(texto).split()

@@ -1,7 +1,21 @@
+import sys
+import os
+
+# Forzar codificación UTF-8 en Windows para evitar UnicodeEncodeError (cp1252 con emojis)
+if sys.platform == "win32":
+    if hasattr(sys.stdout, 'reconfigure'):
+        try:
+            sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        except Exception:
+            pass
+    if hasattr(sys.stderr, 'reconfigure'):
+        try:
+            sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+        except Exception:
+            pass
+
 from PIL import ImageFile
 from asyncio import threads
-import os
-import sys
 
 # Bootstrapper para PyInstaller: Despacha scripts lanzados por subprocess
 if len(sys.argv) >= 2 and sys.argv[1].endswith('.py'):
