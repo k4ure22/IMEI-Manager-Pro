@@ -182,6 +182,14 @@ function toggleTheme() {
 
 /* ============ INIT ============ */
 
+function hideSplash() {
+    const s = document.getElementById('splashOverlay');
+    if (!s) return;
+    s.style.opacity = '0';
+    s.style.pointerEvents = 'none';
+    setTimeout(() => { s.style.display = 'none'; }, 520);
+}
+
 async function initApp() {
     if (_appInited) return;
     _appInited = true;
@@ -202,6 +210,7 @@ async function initApp() {
             currentDbStatus = stateRes.db_status;
             actualizarVisualizacionEstadoBD(currentDbStatus);
             if (currentDbStatus === 'paused') {
+                hideSplash();
                 mostrarPantallaSleep();
                 return;
             }
@@ -213,9 +222,32 @@ async function initApp() {
     // Verificar soporte de huella digital (Touch ID)
     await verificarSoporteBiometrico();
 
+    // Sincronizar sesión persistida desde disco (FilesIMP/session_cache.json) hacia localStorage
+    try {
+        if (window.pywebview && window.pywebview.api && typeof window.pywebview.api.obtener_sesion_local === 'function') {
+            const diskRes = await window.pywebview.api.obtener_sesion_local();
+            if (diskRes && diskRes.status === 'success' && diskRes.session) {
+                localStorage.setItem('imei-last-session', JSON.stringify(diskRes.session));
+            } else {
+                const lsSessionStr = localStorage.getItem('imei-last-session');
+                if (lsSessionStr) {
+                    try {
+                        const lsSession = JSON.parse(lsSessionStr);
+                        if (lsSession && lsSession.email && typeof window.pywebview.api.guardar_sesion_local === 'function') {
+                            await window.pywebview.api.guardar_sesion_local(lsSession);
+                        }
+                    } catch (e) {}
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("Sincronización de sesión:", e);
+    }
+
     // Siempre mostramos la pantalla de login; switchAuthMode detecta internamente
     // si hay un usuario recordado y adapta el encabezado y los campos.
     window.usuarioRecordadoRechazado = false;
+    hideSplash();
     mostrarPantallaLogin();
 }
 
@@ -731,21 +763,74 @@ async function procesarColaBackground(toCheck) {
 
 /* ============ LÓGICA NEON ============ */
 function evaluarNeon(reg) {
-    if (!reg.estado || !reg.razon) return "";
-    let razon = reg.razon.toLowerCase();
-    let estado = reg.estado.toLowerCase();
-    if (razon === "registro" || (razon.includes("registro") && !razon.includes("no registro"))) {
-        let womExito = reg.reg_wom && reg.reg_wom !== 'No' && reg.reg_wom !== 'Error' && reg.reg_wom !== '';
-        let etbExito = reg.reg_etb && reg.reg_etb !== 'No' && reg.reg_etb !== 'Error' && reg.reg_etb !== '';
+    if (!reg) return "";
+    const razon = (reg.razon || "").toLowerCase().trim();
+    const estado = (reg.estado || "").toLowerCase().trim();
+    if (!razon && !estado) return "";
+
+    const esLibre = estado.includes("libre") || estado.includes("desbloquead");
+
+    // Trámite / acción en proceso para desbloqueo (correo WOM enviado o declaración ETB generada)
+    const correoWomEnviado = !!(
+        (reg.fecha_correo_wom && String(reg.fecha_correo_wom).trim() !== '' && String(reg.fecha_correo_wom).trim() !== 'null') ||
+        reg.correo_enviado === true || reg.correo_enviado === 'true' || reg.correo_enviado === 1
+    );
+    const docEtbRealizado = !!(
+        (reg.fecha_declaracion_generada && String(reg.fecha_declaracion_generada).trim() !== '' && String(reg.fecha_declaracion_generada).trim() !== 'null') ||
+        (reg.ruta_declaracion_generada && String(reg.ruta_declaracion_generada).trim() !== '' && String(reg.ruta_declaracion_generada).trim() !== 'null') ||
+        reg.archivo_creado === true || reg.archivo_creado === 'true' || reg.archivo_creado === 1 ||
+        reg.pdf_generado === true || reg.pdf_generado === 'true' || reg.pdf_generado === 1
+    );
+    const tieneAccionEnProceso = correoWomEnviado || docEtbRealizado;
+
+    // Detectar tipos de razones (orden y exclusiones estrictas)
+    const esDesbloqueo = razon.includes("desbloqueo");
+    const esNoRegistro = razon.includes("no registro");
+    const esRegistro   = razon.includes("registro") && !esNoRegistro;
+    const esBloqueo    = !esDesbloqueo && (razon.includes("bloqueo") || razon === "bloqueo definitivo");
+
+    // ── 1. REGISTRO ──
+    // El objetivo es registrar el dispositivo en el operador (WOM o ETB).
+    // Verde: El bot registró exitosamente en WOM o ETB.
+    // Rojo: No se ha registrado aún en ningún operador.
+    if (esRegistro) {
+        const womExito = reg.reg_wom && reg.reg_wom !== 'No' && reg.reg_wom !== 'Error' && reg.reg_wom !== '';
+        const etbExito = reg.reg_etb && reg.reg_etb !== 'No' && reg.reg_etb !== 'Error' && reg.reg_etb !== '';
         return (womExito || etbExito) ? "neon-verde" : "neon-rojo";
     }
-    if (razon.includes("desbloqueo") || razon.includes("no registro")) {
-        if (estado.includes("libre")) return "neon-verde";
-        if (estado.includes("en proceso")) return "neon-amarillo";
+
+    // ── 2. DESBLOQUEO ──
+    // El objetivo es desbloquear un IMEI reportado/bloqueado.
+    // Verde: El estado del IMEI ya está "Libre" (desbloqueado con éxito).
+    // Amarillo: El estado aún no está "Libre", pero ya se inició el trámite (correo WOM enviado o PDF ETB generado).
+    // Rojo: El estado no está "Libre" y no se ha iniciado ningún trámite.
+    if (esDesbloqueo) {
+        if (esLibre) return "neon-verde";
+        if (tieneAccionEnProceso) return "neon-amarillo";
         return "neon-rojo";
     }
-    if (razon.includes("bloqueo")) return !estado.includes("libre") ? "neon-verde" : "neon-rojo";
-    return "";
+
+    // ── 3. NO REGISTRO ──
+    // Bloqueado por falta de registro.
+    // Verde: Ya se encuentra "Libre".
+    // Amarillo: Aún no está "Libre", pero ya se inició trámite (correo o PDF).
+    // Rojo: No está "Libre" y no tiene trámite.
+    if (esNoRegistro) {
+        if (esLibre) return "neon-verde";
+        if (tieneAccionEnProceso) return "neon-amarillo";
+        return "neon-rojo";
+    }
+
+    // ── 4. BLOQUEO / BLOQUEO DEFINITIVO ──
+    // El objetivo es bloquear el IMEI (ej. hurto/extravío reportado por el cliente).
+    // Verde: El IMEI está efectivamente bloqueado (!esLibre: Robo/Hurto, Extravío, No Registrado).
+    // Rojo: El IMEI sigue "Libre" (no se ha bloqueado todavía).
+    if (esBloqueo) {
+        return !esLibre ? "neon-verde" : "neon-rojo";
+    }
+
+    // ── 5. FALLBACK GENÉRICO ──
+    return esLibre ? "neon-verde" : "";
 }
 
 /* ============ RENDERIZAR TABLA ============ */
@@ -1424,8 +1509,22 @@ function procesarCambioEstadoBloqueo(reg, oldEstado, newEstado, newOperador, ind
     const oldEst = (oldEstado || '').trim().toLowerCase();
     const newEst = (newEstado || '').trim().toLowerCase();
 
-    const eraBloqueado = oldEst.includes('robo') || oldEst.includes('hurto') || oldEst.includes('extravi');
-    const esRoboExtravio = newEst.includes('robo') || newEst.includes('hurto') || newEst.includes('extravi');
+    // Si ya se envió el correo o se creó el archivo (está en amarillo), NO volver a pedir PIN o línea
+    const yaProcesado = !!(
+        (reg.fecha_declaracion_generada && String(reg.fecha_declaracion_generada).trim() !== '') ||
+        (reg.ruta_declaracion_generada && String(reg.ruta_declaracion_generada).trim() !== '') ||
+        (reg.fecha_correo_wom && String(reg.fecha_correo_wom).trim() !== '') ||
+        reg.correo_enviado ||
+        reg.archivo_creado ||
+        reg.pdf_generado ||
+        evaluarNeon(reg) === 'neon-amarillo'
+    );
+    if (yaProcesado) {
+        return;
+    }
+
+    const eraBloqueado = oldEst.includes('robo') || oldEst.includes('hurto') || oldEst.includes('extravi') || oldEst.includes('no registrado');
+    const esRoboExtravio = newEst.includes('robo') || newEst.includes('hurto') || newEst.includes('extravi') || newEst.includes('no registrado');
 
     // Condición: si antes no estaba bloqueado (o si era libre / consultando) y ahora es Robo/hurto o Extravío
     if ((!eraBloqueado || oldEst === 'libre' || oldEst === 'consultando...' || oldEst === '') && esRoboExtravio) {
@@ -1677,6 +1776,10 @@ async function abrirDetalles(index) {
     } else if (evaluarNeon(reg) === "neon-verde") {
         impStatus = "Completado";
         impColorClass = "completado";
+        legalTxt.innerText = reg.estado || 'Sin Consultar';
+    } else if (evaluarNeon(reg) === "neon-amarillo") {
+        impStatus = "En Proceso";
+        impColorClass = "en-proceso";
         legalTxt.innerText = reg.estado || 'Sin Consultar';
     } else {
         impStatus = "Pendiente";
@@ -2146,6 +2249,9 @@ async function forzarScraper(imei, index) {
     const oldEstado = registros[targetIdx].estado;
     registros[targetIdx].estado = "Consultando...";
     renderizarTabla();
+    if (indiceDetallesActual === targetIdx) {
+        abrirDetalles(targetIdx);
+    }
     showToastLoading("Consultando imei con Imei Colombia...");
 
     try {
@@ -2155,16 +2261,25 @@ async function forzarScraper(imei, index) {
             registros[targetIdx].estado = res.estado;
             registros[targetIdx].operador = res.operador;
             renderizarTabla();
+            if (indiceDetallesActual === targetIdx) {
+                abrirDetalles(targetIdx);
+            }
             procesarCambioEstadoBloqueo(registros[targetIdx], oldEstado, res.estado, res.operador, targetIdx);
         } else {
             registros[targetIdx].estado = oldEstado || "Error";
             renderizarTabla();
+            if (indiceDetallesActual === targetIdx) {
+                abrirDetalles(targetIdx);
+            }
             showToast("Error al consultar IMEI: " + (res.mensaje || ""), "error");
         }
     } catch (e) {
         hideToastLoading();
         registros[targetIdx].estado = oldEstado || "Error";
         renderizarTabla();
+        if (indiceDetallesActual === targetIdx) {
+            abrirDetalles(targetIdx);
+        }
         showToast("Error en la consulta", "error");
     }
 }
@@ -3260,20 +3375,28 @@ async function confirmarEnvioCorreoWom() {
     if (res.status === 'success') {
         showToast(res.mensaje, 'save');
         document.getElementById('womDesbloqueoOverlay').classList.remove('active');
-        if (indiceDetallesActual !== null) { registros[indiceDetallesActual].fecha_correo_wom = new Date().toISOString(); actualizarWidgetInteligente(registros[indiceDetallesActual]); }
+        const fechaEnvio = new Date().toISOString();
+        if (indiceDetallesActual !== null) {
+            registros[indiceDetallesActual].fecha_correo_wom = fechaEnvio;
+            if (!registros[indiceDetallesActual].fecha_declaracion_generada) {
+                registros[indiceDetallesActual].fecha_declaracion_generada = fechaEnvio;
+            }
+            actualizarWidgetInteligente(registros[indiceDetallesActual]);
+        }
 
-        // Marcar como En proceso: el correo fue enviado, se espera confirmación de desbloqueo
+        // Marcar visualmente como enviado/procesado (amarillo) sin sobreescribir el estado real del IMEI
         try {
             const imeiWom = womDesbIMEIActual;
-            await window.pywebview.api.actualizar_campo(imeiWom, 'estado', 'En proceso');
+            await window.pywebview.api.actualizar_campo(imeiWom, 'fecha_declaracion_generada', fechaEnvio);
             const idx = registros.findIndex(r => r.imei === imeiWom);
             if (idx !== -1) {
-                registros[idx].estado = 'En proceso';
+                registros[idx].fecha_declaracion_generada = fechaEnvio;
+                registros[idx].fecha_correo_wom = fechaEnvio;
                 renderizarTabla();
             }
-            showToast('Correo enviado — IMEI en estado En proceso', 'email');
+            showToast('Correo enviado — Trámite en proceso (Amarillo)', 'email');
         } catch (e) {
-            console.warn('No se pudo actualizar estado a En proceso:', e);
+            console.warn('No se pudo actualizar fecha de correo:', e);
         }
     } else {
         showToast(res.mensaje, 'error');
@@ -3447,14 +3570,20 @@ async function loginCompletadoExitosamente(user) {
 
     window.usuarioRecordadoRechazado = false;
 
-    // Guardar sesión para recordar el último inicio de sesión
-    localStorage.setItem('imei-last-session', JSON.stringify({
+    // Guardar sesión para recordar el último inicio de sesión (LocalStorage + Python backend)
+    const sessionObj = {
         email: currentUser.usuario,
         nombre: currentUser.nombre || currentUser.usuario.split('@')[0],
         avatar_url: currentUser.avatar_url || '',
         access_token: currentUser.access_token || '',
         refresh_token: currentUser.refresh_token || ''
-    }));
+    };
+    localStorage.setItem('imei-last-session', JSON.stringify(sessionObj));
+    try {
+        if (window.pywebview && window.pywebview.api && typeof window.pywebview.api.guardar_sesion_local === 'function') {
+            window.pywebview.api.guardar_sesion_local(sessionObj);
+        }
+    } catch (e) { }
 
     // Ocultar Overlay de Login con animación suave
     const overlay = document.getElementById('authOverlay');
@@ -3798,6 +3927,11 @@ async function ejecutarContinuarSesion() {
 
 function rechazarSesionRecordada() {
     localStorage.removeItem('imei-last-session');
+    try {
+        if (window.pywebview && window.pywebview.api && typeof window.pywebview.api.eliminar_sesion_local === 'function') {
+            window.pywebview.api.eliminar_sesion_local();
+        }
+    } catch (e) { }
     switchAuthMode('login');
 }
 
@@ -4445,17 +4579,26 @@ async function etbGenerarPDFFinal() {
         showToast(res.mensaje, 'save');
         document.getElementById('etbDesbloqueoOverlay').classList.remove('active');
 
-        // Marcar como En proceso: el IMEI está en proceso de desbloqueo, esperando respuesta
+        // Marcar visualmente como archivo creado (amarillo) sin sobreescribir el estado real del IMEI
+        const fechaGen = res.fecha || new Date().toISOString();
+        const rutaPdf = res.ruta || '';
         try {
-            await window.pywebview.api.actualizar_campo(etbDesbIMEI, 'estado', 'En proceso');
+            await window.pywebview.api.actualizar_campo(etbDesbIMEI, 'fecha_declaracion_generada', fechaGen);
+            if (rutaPdf) {
+                await window.pywebview.api.actualizar_campo(etbDesbIMEI, 'ruta_declaracion_generada', rutaPdf);
+            }
             const idx = registros.findIndex(r => r.imei === etbDesbIMEI);
             if (idx !== -1) {
-                registros[idx].estado = 'En proceso';
+                registros[idx].fecha_declaracion_generada = fechaGen;
+                if (rutaPdf) registros[idx].ruta_declaracion_generada = rutaPdf;
                 renderizarTabla();
+                if (indiceDetallesActual === idx) {
+                    actualizarWidgetInteligente(registros[idx]);
+                }
             }
-            showToast('PDF generado — IMEI en estado En proceso', 'file');
+            showToast('PDF generado — Trámite en proceso (Amarillo)', 'file');
         } catch (e) {
-            console.warn('No se pudo actualizar estado a En proceso:', e);
+            console.warn('No se pudo actualizar fecha de declaración ETB:', e);
         }
     } else {
         showToast(res.mensaje, 'error');
@@ -4530,12 +4673,18 @@ function abrirModuloRegistros() {
 let _pendingAvatarDataUrl = null; // Avatar nuevo seleccionado pero no guardado aún
 
 function applyProfileToUI(correo, avatarUrl) {
-    // Config modal — muestra el correo como identificador principal
-    const nameEl = document.getElementById('profileUserName');
-    const initEl = document.getElementById('profileUserInitial');
-    const imgEl = document.getElementById('profileUserImage');
-    if (nameEl) nameEl.textContent = correo || 'Usuario';
-    if (initEl) initEl.textContent = (correo || 'U').charAt(0).toUpperCase();
+    // Config modal — nombre corto arriba, email abajo
+    const nameEl  = document.getElementById('profileUserName');
+    const emailEl = document.getElementById('profileUserEmail');
+    const initEl  = document.getElementById('profileUserInitial');
+    const imgEl   = document.getElementById('profileUserImage');
+
+    // Nombre a mostrar: nombre guardado o parte local del correo
+    const nombre = currentUser?.nombre || (correo ? correo.split('@')[0] : 'Usuario');
+    if (nameEl)  nameEl.textContent  = nombre;
+    if (emailEl) emailEl.textContent = correo || '';
+    if (initEl)  initEl.textContent  = (nombre || correo || 'U').charAt(0).toUpperCase();
+
     if (imgEl && initEl) {
         if (avatarUrl) {
             imgEl.src = avatarUrl;
@@ -5768,6 +5917,11 @@ function getNotifField(notif, fieldName) {
 
 function formatNotificationText(notif) {
     try {
+        const mensajeDirecto = getNotifField(notif, 'mensaje');
+        if (mensajeDirecto && typeof mensajeDirecto === 'string' && mensajeDirecto.trim() !== '') {
+            return mensajeDirecto.trim();
+        }
+
         const modelVal = getNotifField(notif, 'modelo') || 'Dispositivo';
         const model = modelVal.toString().trim();
 
@@ -5895,6 +6049,65 @@ window.recibirNotificacionRealtime = function (notif) {
         console.error("Error in realtime notification render:", renderErr);
     }
 };
+
+window.actualizarEstadoImeiRealtime = function (imei, nuevoEstado, nuevoOperador) {
+    if (!imei) return;
+    const targetImei = String(imei).trim();
+    const idx = registros.findIndex(r => String(r.imei).trim() === targetImei);
+    if (idx !== -1) {
+        const oldEstado = registros[idx].estado;
+        if (nuevoEstado) registros[idx].estado = nuevoEstado;
+        if (nuevoOperador) registros[idx].operador = nuevoOperador;
+        
+        renderizarTabla();
+        
+        // Efecto visual en la fila
+        const rowEl = encontrarElementoFila(targetImei);
+        if (rowEl) {
+            rowEl.classList.add("row-success-flash");
+            setTimeout(() => rowEl.classList.remove("row-success-flash"), 3000);
+        }
+
+        // Si los detalles de este IMEI están abiertos, refrescar
+        if (indiceDetallesActual === idx) {
+            abrirDetalles(idx);
+            if (typeof actualizarWidgetInteligente === 'function') {
+                actualizarWidgetInteligente(registros[idx]);
+            }
+        }
+        
+        if (typeof procesarCambioEstadoBloqueo === 'function' && nuevoEstado) {
+            procesarCambioEstadoBloqueo(registros[idx], oldEstado, nuevoEstado, nuevoOperador || registros[idx].operador, idx);
+        }
+    }
+};
+
+async function probarNotificacion(tipo = 'desbloqueo', imei = '356789012345678', mensaje = '') {
+    if (window.pywebview && window.pywebview.api && typeof window.pywebview.api.probar_notificacion === 'function') {
+        showToastLoading(`Emitiendo notificación (${tipo})...`);
+        try {
+            const res = await window.pywebview.api.probar_notificacion(tipo, imei, mensaje);
+            hideToastLoading();
+            if (res && res.status === 'success') {
+                showToast(res.mensaje || 'Notificación emitida', 'success');
+            } else {
+                showToast('Error: ' + (res?.mensaje || 'No se pudo emitir'), 'error');
+            }
+        } catch (e) {
+            hideToastLoading();
+            showToast('Error al llamar API de notificación: ' + e, 'error');
+        }
+    } else {
+        const titulos = {
+            desbloqueo: `El IMEI ${imei} ha sido desbloqueado`,
+            bloqueo: `El IMEI ${imei} ha sido bloqueado`,
+            solicitud: `Nueva solicitud para IMEI ${imei} (Samsung Galaxy S24)`
+        };
+        const msg = mensaje || titulos[tipo] || `Notificación de prueba: ${tipo}`;
+        showToast(msg, tipo === 'desbloqueo' ? 'unlocked' : (tipo === 'bloqueo' ? 'locked' : 'bell'));
+    }
+}
+window.probarNotificacion = probarNotificacion;
 
 function toggleNotificacionesModal(event) {
     if (event) event.stopPropagation();
@@ -6247,27 +6460,35 @@ async function forzarScraperDetalles() {
     if (indiceDetallesActual === null) return;
     const reg = registros[indiceDetallesActual];
     if (!reg || !reg.imei) return;
+    const targetImei = reg.imei;
     const oldEstado = reg.estado;
     reg.estado = "Consultando...";
     renderizarTabla();
     abrirDetalles(indiceDetallesActual);
     showToastLoading('Consultando estado IMEI...');
     try {
-        const res = await window.pywebview.api.actualizar_imei(reg.imei, true);
+        const res = await window.pywebview.api.actualizar_imei(targetImei, true);
         hideToastLoading();
         if (res && res.status === 'success') {
             showToast('Estado actualizado correctamente', 'success');
             const datos = await window.pywebview.api.obtener_registros();
-            if (datos && datos.status === 'success' && datos.data) {
+            if (Array.isArray(datos)) {
+                registros = datos;
+            } else if (datos && datos.status === 'success' && Array.isArray(datos.data)) {
                 registros = datos.data;
             }
-            if (registros[indiceDetallesActual]) {
-                registros[indiceDetallesActual].estado = res.estado;
-                registros[indiceDetallesActual].operador = res.operador;
+            const newIdx = registros.findIndex(r => r.imei === targetImei);
+            const activeIdx = newIdx > -1 ? newIdx : indiceDetallesActual;
+            if (registros[activeIdx]) {
+                registros[activeIdx].estado = res.estado;
+                registros[activeIdx].operador = res.operador;
+                indiceDetallesActual = activeIdx;
+                renderizarTabla();
+                abrirDetalles(activeIdx);
+                procesarCambioEstadoBloqueo(registros[activeIdx], oldEstado, res.estado, res.operador, activeIdx);
+            } else {
+                renderizarTabla();
             }
-            renderizarTabla();
-            abrirDetalles(indiceDetallesActual);
-            procesarCambioEstadoBloqueo(registros[indiceDetallesActual], oldEstado, res.estado, res.operador, indiceDetallesActual);
         } else {
             reg.estado = oldEstado || "Error";
             renderizarTabla();

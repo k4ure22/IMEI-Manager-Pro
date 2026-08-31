@@ -43,6 +43,11 @@ posibles_rutas = [
     r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe',
     r'C:\Tesseract-OCR\tesseract.exe',
 ]
+_app_base = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+posibles_rutas.append(os.path.join(_app_base, 'Tesseract-OCR', 'tesseract.exe'))
+posibles_rutas.append(os.path.join(_app_base, 'tesseract', 'tesseract.exe'))
+if hasattr(sys, '_MEIPASS'):
+    posibles_rutas.append(os.path.join(sys._MEIPASS, 'Tesseract-OCR', 'tesseract.exe'))
 _local_appdata = os.environ.get('LOCALAPPDATA')
 if _local_appdata:
     posibles_rutas.append(os.path.join(_local_appdata, 'Tesseract-OCR', 'tesseract.exe'))
@@ -50,6 +55,7 @@ if _local_appdata:
 _user_profile = os.environ.get('USERPROFILE')
 if _user_profile:
     posibles_rutas.append(os.path.join(_user_profile, 'AppData', 'Local', 'Programs', 'Tesseract-OCR', 'tesseract.exe'))
+    posibles_rutas.append(os.path.join(_user_profile, 'AppData', 'Local', 'Tesseract-OCR', 'tesseract.exe'))
 ruta_tesseract = next((r for r in posibles_rutas if os.path.exists(r)), shutil.which('tesseract'))
 if ruta_tesseract:
     pytesseract.pytesseract.tesseract_cmd = ruta_tesseract

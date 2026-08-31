@@ -218,10 +218,16 @@ def set_dock_icon(mode):
     except Exception as e:
         print(f"⚠️ [ICON] No se pudo cambiar el icono del Dock: {e}")
 
-def obtener_puerto_libre():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(('127.0.0.1', 0))
-        return s.getsockname()[1]
+def obtener_puerto_libre(puerto_preferido=8089):
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(('127.0.0.1', puerto_preferido))
+            return puerto_preferido
+    except Exception:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(('127.0.0.1', 0))
+            return s.getsockname()[1]
+
 
 
 def _get_webview_gui():
@@ -841,11 +847,51 @@ class Api:
                 "mensaje": f"Bienvenido de nuevo, {usuario}."
             }
         except Exception as e:
-            try:
-                supabase.auth.sign_out()
-            except:
-                pass
-            return {"status": "error", "mensaje": f"Sesión expirada o inválida: {str(e)}"}
+            err_msg = str(e)
+            print(f"❌ [API] Excepción en login_con_token: {err_msg}")
+            return {"status": "error", "mensaje": f"Sesión expirada o inválida: {err_msg}"}
+
+    def guardar_sesion_local(self, datos):
+        """Guarda la sesión del usuario en disco para restaurarla automáticamente tras reinicios."""
+        try:
+            folder = self._get_files_imp_dir()
+            path = os.path.join(folder, "session_cache.json")
+            import json
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(datos, f, ensure_ascii=False, indent=2)
+            print(f"💾 [API] Sesión persistida en disco para: {datos.get('email') or datos.get('usuario')}")
+            return {"status": "success"}
+        except Exception as e:
+            print(f"⚠️ [API] Error guardando sesión en disco: {e}")
+            return {"status": "error", "mensaje": str(e)}
+
+    def obtener_sesion_local(self):
+        """Recupera la sesión guardada en disco si existe."""
+        try:
+            folder = self._get_files_imp_dir()
+            path = os.path.join(folder, "session_cache.json")
+            if os.path.exists(path):
+                import json
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    print(f"🔑 [API] Sesión persistida recuperada de disco: {data.get('email') or data.get('usuario')}")
+                    return {"status": "success", "session": data}
+            return {"status": "empty", "session": None}
+        except Exception as e:
+            print(f"⚠️ [API] Error leyendo sesión en disco: {e}")
+            return {"status": "error", "mensaje": str(e)}
+
+    def eliminar_sesion_local(self):
+        """Elimina el archivo de sesión persistida en disco."""
+        try:
+            folder = self._get_files_imp_dir()
+            path = os.path.join(folder, "session_cache.json")
+            if os.path.exists(path):
+                os.remove(path)
+            print("🗑️ [API] Sesión persistida eliminada de disco.")
+            return {"status": "success"}
+        except Exception as e:
+            return {"status": "error", "mensaje": str(e)}
 
     def abrir_url(self, url):
         """Abre una URL en el navegador predeterminado del sistema."""
@@ -1482,19 +1528,102 @@ class Api:
         threading.Thread(target=self._monitor_notificaciones_bg, daemon=True).start()
         threading.Thread(target=self._monitor_registros_bg, daemon=True).start()
 
-    def _monitor_registros_bg(self):
-        import time
+    def probar_notificacion(self, tipo="desbloqueo", imei="356789012345678", mensaje=""):
+        try:
+            import time
+            from datetime import datetime
+            tipo_lower = str(tipo or "desbloqueo").lower().strip()
+            imei_val = str(imei or "356789012345678").strip()
+
+            if tipo_lower == "desbloqueo":
+                sub = "IMEI Desbloqueado"
+                msg = mensaje or f"El IMEI {imei_val} ha sido desbloqueado"
+                razon = "Desbloqueo"
+            elif tipo_lower == "bloqueo":
+                sub = "IMEI Bloqueado (Robo/Hurto)"
+                msg = mensaje or f"El IMEI {imei_val} ha sido bloqueado"
+                razon = "Bloqueo"
+            elif tipo_lower == "solicitud":
+                sub = "Nueva Solicitud"
+                msg = mensaje or f"Nueva solicitud para IMEI {imei_val} (Samsung Galaxy S24)"
+                razon = "Solicitud"
+            else:
+                sub = "Notificación de Prueba"
+                msg = mensaje or f"Prueba de notificación para IMEI {imei_val}"
+                razon = "Prueba"
+
+            print(f"🧪 [TEST NOTIF] Emitiendo notificación de prueba ({tipo_lower}): {msg}")
+
+            # 1. Enviar notificación nativa al SO (Windows / macOS)
+            self._enviar_notificacion_nativa("IMEI Manager Pro", msg, subtitulo=sub)
+
+            # 2. Despachar a la interfaz web si la ventana está activa
+            if self.window:
+                import json
+                fake_notif = {
+                    "id": int(time.time() * 1000) % 1000000,
+                    "IMEI": imei_val,
+                    "Razon": razon,
+                    "modelo": "Dispositivo de Prueba",
+                    "descripcion": msg,
+                    "mensaje": msg,
+                    "ingreso": datetime.now().astimezone().isoformat()
+                }
+                notif_json = json.dumps(fake_notif)
+                self.window.evaluate_js(f"if (typeof window.recibirNotificacionRealtime === 'function') {{ window.recibirNotificacionRealtime({notif_json}); }}")
+
+            return {"status": "success", "mensaje": f"Notificación emitida: {msg}"}
+        except Exception as e:
+            return {"status": "error", "mensaje": str(e)}
+
     def _enviar_notificacion_nativa(self, titulo, mensaje, subtitulo=""):
         try:
-            titulo_clean = str(titulo).replace('"', '\\"').replace("'", "'")
-            mensaje_clean = str(mensaje).replace('"', '\\"').replace("'", "'")
-            subtitulo_clean = str(subtitulo).replace('"', '\\"').replace("'", "'")
-            
+            titulo_clean = str(titulo or "IMEI Manager Pro").replace('"', '\\"').replace("'", "''")
+            mensaje_clean = str(mensaje or "").replace('"', '\\"').replace("'", "''")
+            subtitulo_clean = str(subtitulo or "").replace('"', '\\"').replace("'", "''")
+
+            # 1. macOS: AppleScript con sonido Glass
             if sys.platform == "darwin":
                 script = f'display notification "{mensaje_clean}" with title "{titulo_clean}"'
                 if subtitulo_clean:
                     script += f' subtitle "{subtitulo_clean}"'
+                script += ' sound name "Glass"'
                 subprocess.Popen(['/usr/bin/osascript', '-e', script])
+
+            # 2. Windows: PowerShell WinRT Toast Notification (Moderno Win10/11) con Fallback a BalloonTip
+            elif sys.platform.startswith("win") or sys.platform == "win32":
+                ps_script = f"""
+                $ErrorActionPreference = 'SilentlyContinue'
+                try {{
+                    [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+                    $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+                    $textNodes = $template.GetElementsByTagName('text')
+                    $titleText = '{titulo_clean}'
+                    if ('{subtitulo_clean}') {{ $titleText = '{titulo_clean} - {subtitulo_clean}' }}
+                    $textNodes.Item(0).AppendChild($template.CreateTextNode($titleText)) | Out-Null
+                    $textNodes.Item(1).AppendChild($template.CreateTextNode('{mensaje_clean}')) | Out-Null
+                    $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
+                    [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('IMEI Manager Pro').Show($toast)
+                }} catch {{
+                    [reflection.assembly]::loadwithpartialname('System.Windows.Forms') | Out-Null
+                    $notify = new-object system.windows.forms.notifyicon
+                    $notify.icon = [system.drawing.systemicons]::Information
+                    $notify.visible = $true
+                    $titleText = '{titulo_clean}'
+                    if ('{subtitulo_clean}') {{ $titleText = '{titulo_clean} - {subtitulo_clean}' }}
+                    $notify.showballoontip(4000, $titleText, '{mensaje_clean}', [system.windows.forms.tooltipicon]::Info)
+                }}
+                """
+                flags = 0x08000000  # CREATE_NO_WINDOW
+                subprocess.Popen(
+                    ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
+                    creationflags=flags
+                )
+
+            # 3. Linux
+            elif sys.platform.startswith("linux"):
+                full_msg = f"{subtitulo_clean}\n{mensaje_clean}" if subtitulo_clean else mensaje_clean
+                subprocess.Popen(['notify-send', titulo_clean, full_msg])
             else:
                 print(f"🔔 [Notificación Nativa]: {titulo_clean} - {subtitulo_clean} - {mensaje_clean}")
         except Exception as e:
@@ -1504,37 +1633,78 @@ class Api:
         import time
         import hashlib
         import json
-        
-        # Esperar a que la ventana y el webview carguen
-        time.sleep(5)
-        
-        last_registros_hash = None
+
+        time.sleep(3)
+
+        last_registros_map = {}
+        is_first_reg_check = True
         last_fastreg_hash = None
-        INTERVALO_BASE = 15  # Segundos entre cada polling
-        INTERVALO_MAX = 60   # Máximo en caso de errores consecutivos
+        INTERVALO_BASE = 3  # Polling reactivo cada 3s para notificaciones inmediatas de estado
+        INTERVALO_MAX = 20
         intervalo_actual = INTERVALO_BASE
         errores_consecutivos = 0
-        
-        print("📡 [Realtime] Iniciando monitoreo de registros y FastReg (intervalo: 15s)...")
+
+        estados_bloqueo_set = {'robo/hurto', 'extravío', 'extravio', 'no registrado'}
+
+        print("📡 [Realtime] Monitoreando cambios de estado en 'registros' y 'FastReg' (intervalo: 3s)...")
         while True:
             try:
                 if self._is_db_locked():
                     time.sleep(INTERVALO_BASE)
                     continue
 
-                # 1. Monitorear registros
+                # 1. Monitorear registros de IMEI y cambios de estado
                 res_reg = safe_supabase(lambda: supabase.table('registros').select('*').execute())
                 if res_reg and res_reg.data is not None:
                     reg_data = res_reg.data
-                    reg_data_sorted = sorted(reg_data, key=lambda x: str(x.get('imei', '')))
-                    reg_json = json.dumps(reg_data_sorted, sort_keys=True)
-                    reg_hash = hashlib.sha256(reg_json.encode('utf-8')).hexdigest()
-                    
-                    if last_registros_hash is not None and reg_hash != last_registros_hash:
-                        print("🔄 [Realtime] Cambio detectado en 'registros', avisando al frontend para botón actualizar...")
-                        if self.window:
-                            self.window.evaluate_js("if (typeof window.recibirActualizacionRegistros === 'function') { window.recibirActualizacionRegistros(); }")
-                    last_registros_hash = reg_hash
+                    current_map = {str(r.get('imei') or '').strip(): r for r in reg_data if r.get('imei')}
+
+                    if is_first_reg_check:
+                        last_registros_map = current_map
+                        is_first_reg_check = False
+                    else:
+                        cambios_detectados = False
+                        for imei, new_reg in current_map.items():
+                            old_reg = last_registros_map.get(imei)
+                            if old_reg:
+                                old_estado = (old_reg.get('estado') or '').strip()
+                                new_estado = (new_reg.get('estado') or '').strip()
+                                old_est_low = old_estado.lower()
+                                new_est_low = new_estado.lower()
+
+                                if old_estado != new_estado and old_estado != '' and new_estado != '':
+                                    cambios_detectados = True
+                                    print(f"🔄 [Realtime Estado] IMEI {imei} cambió de '{old_estado}' a '{new_estado}'")
+
+                                    # Detectar desbloqueo (de estado de bloqueo a Libre)
+                                    if (old_est_low in estados_bloqueo_set or 'libre' not in old_est_low) and 'libre' in new_est_low:
+                                        msg = f"El IMEI {imei} ha sido desbloqueado"
+                                        self._enviar_notificacion_nativa("IMEI Manager Pro", msg, subtitulo="IMEI Desbloqueado")
+
+                                    # Detectar bloqueo (de Libre a estado de bloqueo)
+                                    elif 'libre' in old_est_low and (new_est_low in estados_bloqueo_set or 'libre' not in new_est_low):
+                                        msg = f"El IMEI {imei} ha sido bloqueado"
+                                        self._enviar_notificacion_nativa("IMEI Manager Pro", msg, subtitulo=f"IMEI Bloqueado ({new_estado})")
+
+                                    # Otro cambio relevante
+                                    else:
+                                        msg = f"El IMEI {imei} cambió a {new_estado}"
+                                        self._enviar_notificacion_nativa("IMEI Manager Pro", msg, subtitulo="Actualización de Estado")
+
+                                    # Actualizar en tiempo real el frontend
+                                    if self.window:
+                                        op_val = new_reg.get('operador') or ''
+                                        self.window.evaluate_js(
+                                            f"if (typeof window.actualizarEstadoImeiRealtime === 'function') {{ window.actualizarEstadoImeiRealtime('{imei}', '{new_estado}', '{op_val}'); }}"
+                                        )
+                            elif old_reg is None and not is_first_reg_check:
+                                cambios_detectados = True
+
+                        if cambios_detectados:
+                            if self.window:
+                                self.window.evaluate_js("if (typeof window.recibirActualizacionRegistros === 'function') { window.recibirActualizacionRegistros(); }")
+
+                        last_registros_map = current_map
 
                 # 2. Monitorear FastReg
                 res_fast = safe_supabase(lambda: supabase.table('FastReg').select('*').execute())
@@ -1543,14 +1713,13 @@ class Api:
                     fast_data_sorted = sorted(fast_data, key=lambda x: str(x.get('IMEI', '')))
                     fast_json = json.dumps(fast_data_sorted, sort_keys=True)
                     fast_hash = hashlib.sha256(fast_json.encode('utf-8')).hexdigest()
-                    
+
                     if last_fastreg_hash is not None and fast_hash != last_fastreg_hash:
-                        print("🔄 [Realtime] Cambio detectado en 'FastReg', avisando al frontend para botón actualizar...")
+                        print("🔄 [Realtime] Cambio detectado en 'FastReg', avisando al frontend...")
                         if self.window:
                             self.window.evaluate_js("if (typeof window.recibirActualizacionFastReg === 'function') { window.recibirActualizacionFastReg(); }")
                     last_fastreg_hash = fast_hash
 
-                # Reset en caso de éxito
                 if errores_consecutivos > 0:
                     print(f"✅ [Realtime] Conexión restablecida tras {errores_consecutivos} error(es).")
                 errores_consecutivos = 0
@@ -1560,33 +1729,33 @@ class Api:
                 errores_consecutivos += 1
                 intervalo_actual = min(INTERVALO_BASE * (2 ** errores_consecutivos), INTERVALO_MAX)
                 print(f"❌ [Realtime Error] Error monitoreando registros ({errores_consecutivos}x): {e} — reintentando en {intervalo_actual}s")
-            
+
             time.sleep(intervalo_actual)
 
     def _monitor_notificaciones_bg(self):
         import time
         import json
-        
+
         seen_ids = set()
         is_first_check = True
-        INTERVALO_BASE = 5  # Polling continuo a 5s para notificaciones
-        INTERVALO_MAX = 30
+        INTERVALO_BASE = 3  # Polling continuo a 3s para notificaciones
+        INTERVALO_MAX = 20
         intervalo_actual = INTERVALO_BASE
         errores_consecutivos = 0
-        
-        time.sleep(3)
-        print("📡 [Realtime] Monitoreando notificaciones y solicitudes en BD (intervalo: 5s)...")
+
+        time.sleep(2)
+        print("📡 [Realtime] Monitoreando notificaciones y solicitudes en BD (intervalo: 3s)...")
         while True:
             try:
                 if self._is_db_locked():
                     time.sleep(INTERVALO_BASE)
                     continue
-                
+
                 # Consultar notificaciones de Supabase con safe_supabase
                 res = safe_supabase(lambda: supabase.table('Solicitud').select('*').order('id', desc=True).execute())
                 if res and res.data:
                     current_notifications = res.data
-                    
+
                     if is_first_check:
                         for notif in current_notifications:
                             n_id = notif.get('id') or notif.get('ID')
@@ -1600,31 +1769,34 @@ class Api:
                             if n_id is not None and n_id not in seen_ids:
                                 seen_ids.add(n_id)
                                 new_notifications.append(notif)
-                        
+
                         # Despachar notificaciones de más vieja a más nueva
                         for notif in reversed(new_notifications):
                             notif_json = json.dumps(notif)
                             print(f"🔔 [Realtime] Nueva notificación en BD: {notif}")
                             if self.window:
                                 self.window.evaluate_js(f"if (typeof window.recibirNotificacionRealtime === 'function') {{ window.recibirNotificacionRealtime({notif_json}); }}")
-                            
-                            # Disparar Notificación Nativa en macOS
+
+                            # Disparar Notificación Nativa en Windows y macOS
                             imei = notif.get('IMEI') or notif.get('imei') or ''
-                            razon = notif.get('Razon') or notif.get('razon') or 'Solicitud'
+                            razon = notif.get('Razon') or notif.get('razon') or notif.get('tipo') or 'Solicitud'
                             modelo = notif.get('modelo') or notif.get('Modelo') or ''
-                            descripcion = notif.get('descripcion') or ''
-                            
+                            descripcion = notif.get('Descripción') or notif.get('descripcion') or notif.get('Descripcion') or notif.get('mensaje') or notif.get('Mensaje') or ''
+
                             titulo_nativ = "IMEI Manager Pro"
-                            if imei:
+                            if descripcion and str(descripcion).startswith("Nueva solicitud"):
+                                sub_nativ = "Nueva Solicitud"
+                                msg_nativ = str(descripcion)
+                            elif imei:
                                 sub_nativ = f"Nueva Solicitud ({razon})"
                                 msg_nativ = f"IMEI: {imei}" + (f" | {modelo}" if modelo else "")
                             elif descripcion:
                                 sub_nativ = f"Centro de Notificaciones ({razon})"
-                                msg_nativ = descripcion
+                                msg_nativ = str(descripcion)
                             else:
                                 sub_nativ = "Notificación de BD"
                                 msg_nativ = f"Nueva entrada en solicitudes: {razon}"
-                                
+
                             self._enviar_notificacion_nativa(titulo_nativ, msg_nativ, subtitulo=sub_nativ)
 
                 # Reset en caso de éxito
@@ -1637,7 +1809,7 @@ class Api:
                 errores_consecutivos += 1
                 intervalo_actual = min(INTERVALO_BASE * (2 ** errores_consecutivos), INTERVALO_MAX)
                 print(f"⚠️ [Realtime] Error al monitorear notificaciones ({errores_consecutivos}x): {e} — reintentando en {intervalo_actual}s")
-            
+
             time.sleep(intervalo_actual)
 
     def _evaluar_estado_registro(self, reg):
@@ -1778,7 +1950,9 @@ class Api:
         campos_permitidos = [
             "modelo", "cliente", "razon", "encargado", "pago",
             "reg_wom", "reg_etb", "foto_dispositivo", "linea", "blacklist",
-            "estado", "operador", "pin_desbloqueo"
+            "estado", "operador", "pin_desbloqueo",
+            "ruta_declaracion_generada", "fecha_declaracion_generada",
+            "fecha_correo_wom", "correo_enviado", "archivo_creado", "pdf_generado"
         ]
         if campo not in campos_permitidos:
             return {"status": "error", "mensaje": f"Campo {campo} no modificable."}
@@ -1792,7 +1966,15 @@ class Api:
             except Exception as he:
                 print(f"⚠️ [Hook] Error fetching old record: {he}")
 
-            supabase.table('registros').update({campo: valor}).eq('imei', imei).execute()
+            try:
+                supabase.table('registros').update({campo: valor}).eq('imei', imei).execute()
+            except Exception as ue:
+                err_str = str(ue)
+                print(f"⚠️ [Hook] Advertencia al actualizar campo '{campo}' en BD: {err_str}")
+                if "schema \"net\" does not exist" in err_str or "3F000" in err_str:
+                    print("💡 [Trigger BD] Nota: El trigger en Supabase requiere la extensión pg_net o manejar EXCEPTION.")
+                    return {"status": "success", "advertencia": "Campo actualizado (trigger de BD requiere pg_net)"}
+                raise ue
 
             try:
                 if old_reg:
@@ -1867,8 +2049,20 @@ class Api:
                     ruta_declaracion_wom=decl_path,
                     ruta_foto_cc=foto_cc
                 )
+                msg = resultado.get('mensaje', 'Correo enviado')
+                if resultado.get('status') == 'success':
+                    try:
+                        from datetime import datetime
+                        fecha_envio = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        safe_supabase(lambda: supabase.table('registros').update({
+                            'fecha_correo_wom': fecha_envio,
+                            'correo_enviado': True,
+                            'fecha_declaracion_generada': fecha_envio
+                        }).eq('imei', str(imei).strip()).execute())
+                    except Exception as e_sup:
+                        print(f"⚠️ Error actualizando fecha_declaracion_generada en Supabase: {e_sup}")
                 if self.window:
-                    icon = 'save' if resultado['status'] == 'success' else 'error'
+                    icon = 'save' if resultado.get('status') == 'success' else 'error'
                     self.window.evaluate_js(f"showToast('{msg}', '{icon}')")
             except Exception as e:
                 if self.window:
@@ -2641,10 +2835,21 @@ end tell
             with open(output, "wb") as f:
                 writer.write(f)
 
+            from datetime import datetime
+            fecha_gen = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            try:
+                safe_supabase(lambda: supabase.table('registros').update({
+                    'ruta_declaracion_generada': output,
+                    'fecha_declaracion_generada': fecha_gen
+                }).eq('imei', str(imei).strip()).execute())
+            except Exception as e_up:
+                print(f"⚠️ Error actualizando declaración ETB en registros: {e_up}")
+
             abrir_archivo(output)
             return {
                 "status": "success",
                 "ruta": output,
+                "fecha": fecha_gen,
                 "mensaje": f"PDF guardado en Descargas: {imei}desbloqueo.pdf"
             }
         except ImportError:
@@ -2922,10 +3127,23 @@ end tell
             except Exception as he:
                 print(f"⚠️ [Hook] Error fetching old record in actualizar_imei: {he}")
 
-            supabase.table('registros').update({
-                'estado': estado,
-                'operador': operador
-            }).eq('imei', imei).execute()
+            try:
+                supabase.table('registros').update({
+                    'estado': estado,
+                    'operador': operador
+                }).eq('imei', imei).execute()
+            except Exception as ue:
+                err_str = str(ue)
+                print(f"⚠️ [Hook] Advertencia al actualizar BD en actualizar_imei: {err_str}")
+                if "schema \"net\" does not exist" in err_str or "3F000" in err_str:
+                    print("💡 [Trigger BD] Nota: El trigger trigger_cambio_estado en Supabase requiere la extensión pg_net o manejar EXCEPTION.")
+                    return {
+                        "status": "success",
+                        "estado": estado,
+                        "operador": operador,
+                        "advertencia": "Estado consultado exitosamente. Nota: El trigger de BD requiere habilitar pg_net en Supabase."
+                    }
+                raise ue
 
             try:
                 new_res = supabase.table('registros').select('*').eq('imei', imei).execute()

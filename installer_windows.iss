@@ -47,4 +47,6 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
+; Instalación silenciosa de Tesseract OCR si no está presente en el sistema
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""if (-not (Test-Path 'C:\Program Files\Tesseract-OCR\tesseract.exe') -and -not (Test-Path '$env:LOCALAPPDATA\Programs\Tesseract-OCR\tesseract.exe') -and -not (Test-Path '{app}\Tesseract-OCR\tesseract.exe')) { try { winget install --id UB-Mannheim.TesseractOCR -e --silent --accept-source-agreements --accept-package-agreements 2>$null } catch {} }"""; StatusMsg: "Configurando dependencias OCR (Tesseract)..."; Flags: runhidden
 Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Filename: "{app}\{#MyAppExeName}"; Flags: nowait postinstall skipifsilent

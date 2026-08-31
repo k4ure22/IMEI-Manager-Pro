@@ -1,14 +1,95 @@
 @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&display=swap');
 
 /* ============================
-           FUENTES — San Francisco / Apple
+           FUENTES — San Francisco / Apple / Windows Segoe UI
         ============================ */
 * {
-    font-family: -apple-system, "SF Pro Display", "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-family: -apple-system, "SF Pro Display", "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
     box-sizing: border-box;
+}
+
+/* ── Optimización Específica para Windows ── */
+[data-os="windows"],
+.is-windows {
+    --win-font-base: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --win-font-mono: 'Cascadia Code', 'Consolas', 'Segoe UI Mono', 'SF Mono', monospace;
+    font-family: var(--win-font-base);
+}
+
+[data-os="windows"] *,
+.is-windows * {
+    font-family: var(--win-font-base);
+    text-rendering: optimizeLegibility;
+}
+
+[data-os="windows"] code,
+[data-os="windows"] pre,
+[data-os="windows"] .font-mono,
+.is-windows code,
+.is-windows pre,
+.is-windows .font-mono {
+    font-family: var(--win-font-mono) !important;
+}
+
+[data-os="windows"] body,
+.is-windows body {
+    font-size: 13.2px;
+    line-height: 1.42;
+    letter-spacing: 0.01em;
+}
+
+/* Centrado vertical y horizontal perfecto en Windows */
+[data-os="windows"] button,
+.is-windows button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+}
+
+[data-os="windows"] .btn-icon,
+.is-windows .btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+[data-os="windows"] input,
+[data-os="windows"] select,
+[data-os="windows"] textarea,
+.is-windows input,
+.is-windows select,
+.is-windows textarea {
+    line-height: 1.35;
+}
+
+[data-os="windows"] table td,
+[data-os="windows"] table th,
+.is-windows table td,
+.is-windows table th {
+    vertical-align: middle;
+    line-height: 1.38;
+}
+
+[data-os="windows"] .neon-indicator,
+.is-windows .neon-indicator {
+    align-self: center;
+}
+
+[data-os="windows"] .badge-glow-captura,
+[data-os="windows"] .badge-glow-consultando,
+[data-os="windows"] .badge-glow-modelo,
+.is-windows .badge-glow-captura,
+.is-windows .badge-glow-consultando,
+.is-windows .badge-glow-modelo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
 }
 
 /* ============================
@@ -2004,21 +2085,28 @@ tbody tr:hover .neon-indicator {
 }
 
 /* ============================
-           MODAL PERSONAL — MEJORADO
-        ============================ */
-#personalOverlay .personal-panel {
+   MODAL PERSONAL Y CLIENTES — MEJORADO
+============================ */
+.personal-panel,
+#personalOverlay .personal-panel,
+#clientesOverlay .personal-panel {
     display: flex;
     flex-direction: column;
     max-height: calc(100vh - var(--app-gap) - var(--dock-bottom-space));
+    min-height: min(650px, 80vh);
 }
 
-#personalOverlay .personal-header {
+.personal-header,
+#personalOverlay .personal-header,
+#clientesOverlay .personal-header {
     flex-shrink: 0;
-    padding: 28px 28px 16px;
+    padding: 26px 30px 18px;
     border-bottom: 1px solid var(--th-bd);
 }
 
-#personalOverlay .personal-body {
+.personal-body,
+#personalOverlay .personal-body,
+#clientesOverlay .personal-body {
     flex: 1;
     overflow-y: auto;
     padding: 20px 28px 28px;
@@ -4794,14 +4882,18 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 260%;
-    height: 380%;
+    width: 500%;
+    height: 500%;
+    transform: translate(-50%, -50%);
     background: conic-gradient(
+        from 0deg,
         transparent 0deg,
-        transparent 160deg,
-        rgba(0, 243, 255, 0.25) 240deg,
-        rgba(0, 243, 255, 0.85) 320deg,
-        #ffffff 360deg
+        transparent 300deg,
+        rgba(0, 243, 255, 0.15) 315deg,
+        rgba(0, 243, 255, 0.8) 345deg,
+        rgba(255, 255, 255, 0.95) 352deg,
+        rgba(0, 243, 255, 0.8) 358deg,
+        rgba(0, 243, 255, 0.15) 360deg
     );
     animation: rotateClockwise 2.2s linear infinite;
     z-index: -2;
@@ -4835,14 +4927,18 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 260%;
-    height: 380%;
+    width: 500%;
+    height: 500%;
+    transform: translate(-50%, -50%);
     background: conic-gradient(
+        from 0deg,
         transparent 0deg,
-        transparent 160deg,
-        rgba(244, 63, 94, 0.25) 240deg,
-        rgba(244, 63, 94, 0.9) 320deg,
-        #ffffff 360deg
+        transparent 300deg,
+        rgba(244, 63, 94, 0.15) 315deg,
+        rgba(244, 63, 94, 0.8) 345deg,
+        rgba(255, 255, 255, 0.95) 352deg,
+        rgba(244, 63, 94, 0.8) 358deg,
+        rgba(244, 63, 94, 0.15) 360deg
     );
     animation: rotateClockwise 2s linear infinite;
     z-index: -2;
@@ -4879,14 +4975,18 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 260%;
-    height: 380%;
+    width: 500%;
+    height: 500%;
+    transform: translate(-50%, -50%);
     background: conic-gradient(
+        from 0deg,
         transparent 0deg,
-        transparent 160deg,
-        rgba(168, 85, 247, 0.25) 240deg,
-        rgba(168, 85, 247, 0.9) 320deg,
-        #ffffff 360deg
+        transparent 300deg,
+        rgba(168, 85, 247, 0.15) 315deg,
+        rgba(168, 85, 247, 0.8) 345deg,
+        rgba(255, 255, 255, 0.95) 352deg,
+        rgba(168, 85, 247, 0.8) 358deg,
+        rgba(168, 85, 247, 0.15) 360deg
     );
     animation: rotateClockwise 2.2s linear infinite;
     z-index: -2;

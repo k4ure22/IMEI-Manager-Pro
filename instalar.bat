@@ -19,16 +19,27 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo [1/2] Actualizando pip...
+echo [1/3] Actualizando pip...
 python -m pip install --upgrade pip
 
-echo [2/2] Instalando dependencias...
+echo [2/3] Instalando dependencias de Python (Selenium, Webdriver-Manager, Pytesseract, etc.)...
 python -m pip install -r requirements.txt
 if errorlevel 1 (
     echo.
     echo [ERROR] Fallo la instalacion de dependencias.
     pause
     exit /b 1
+)
+
+echo [3/3] Verificando Tesseract OCR...
+where tesseract >nul 2>&1
+if errorlevel 1 (
+    if not exist "C:\Program Files\Tesseract-OCR\tesseract.exe" (
+        if not exist "%LOCALAPPDATA%\Programs\Tesseract-OCR\tesseract.exe" (
+            echo Instalando Tesseract OCR automaticamente via winget...
+            winget install --id UB-Mannheim.TesseractOCR -e --silent --accept-source-agreements --accept-package-agreements >nul 2>&1
+        )
+    )
 )
 
 if not exist "Controllers\temp_screenshots" mkdir "Controllers\temp_screenshots"

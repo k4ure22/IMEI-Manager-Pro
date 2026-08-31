@@ -173,21 +173,11 @@ function rrCambiarTab(tab) {
         if (seccionAvanzada) {
             if (tab === 'estandar' || tab === 'detallada') {
                 seccionAvanzada.classList.remove('hidden');
-                seccionAvanzada.style.opacity = '0';
-                seccionAvanzada.style.maxHeight = '0';
-                requestAnimationFrame(() => {
-                    seccionAvanzada.style.transition = 'max-height 0.4s cubic-bezier(0.16,1,0.3,1), opacity 0.3s ease';
-                    seccionAvanzada.style.maxHeight = '900px';
-                    seccionAvanzada.style.opacity = '1';
-                });
+                seccionAvanzada.style.opacity = '1';
+                seccionAvanzada.style.maxHeight = 'none';
             } else {
-                seccionAvanzada.style.maxHeight = seccionAvanzada.scrollHeight + 'px';
-                requestAnimationFrame(() => {
-                    seccionAvanzada.style.transition = 'max-height 0.35s cubic-bezier(0.16,1,0.3,1), opacity 0.25s ease';
-                    seccionAvanzada.style.maxHeight = '0';
-                    seccionAvanzada.style.opacity = '0';
-                    setTimeout(() => seccionAvanzada.classList.add('hidden'), 380);
-                });
+                seccionAvanzada.classList.add('hidden');
+                seccionAvanzada.style.opacity = '0';
             }
         }
 

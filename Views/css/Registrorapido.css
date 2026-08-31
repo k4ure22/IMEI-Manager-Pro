@@ -246,6 +246,18 @@
     display: flex;
     gap: 1.5rem;
     align-items: stretch;
+    min-height: 100%;
+}
+
+.rr-col-left,
+.rr-col-right {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 420px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
 }
 
 .rr-divider {
@@ -258,6 +270,10 @@
 @media (max-width: 768px) {
     .rr-grid-2col {
         flex-direction: column;
+    }
+    .rr-col-left,
+    .rr-col-right {
+        min-height: auto;
     }
     .rr-divider {
         display: none;
