@@ -1,8 +1,23 @@
 import sys
 import os
 
-# Forzar codificación UTF-8 en Windows para evitar UnicodeEncodeError (cp1252 con emojis)
+# 1. Configuración de Alta Resolución (DPI Awareness) y UTF-8 para Windows
 if sys.platform == "win32":
+    try:
+        import ctypes
+        # Per-Monitor V2 DPI Awareness (Windows 10 1703+)
+        ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
+    except Exception:
+        try:
+            # System DPI Awareness (Windows 8.1+)
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        except Exception:
+            try:
+                # Basic DPI Awareness
+                ctypes.windll.user32.SetProcessDPIAware()
+            except Exception:
+                pass
+
     if hasattr(sys.stdout, 'reconfigure'):
         try:
             sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -14,18 +29,53 @@ if sys.platform == "win32":
         except Exception:
             pass
 
-from PIL import ImageFile
-from asyncio import threads
+# 2. Bootstrapper seguro para PyInstaller: Despacha submódulos compilados en PYZ
+if len(sys.argv) >= 2:
+    first_arg = sys.argv[1]
+    target_mod = None
+    args_offset = 2
+    if first_arg == '--run-module' and len(sys.argv) >= 3:
+        target_mod = sys.argv[2]
+        args_offset = 3
+    elif first_arg.endswith('.py') or first_arg in [
+        'GeneradorPDF', 'ConsultarModelo', 'ConsultarModeloPro',
+        'RegistrarWom', 'RegistrarEtb', 'consultar_imei',
+        'TomarPantallazo', 'EnviarCorreoWom', 'EstilizadorPantallazo', 'blacklist'
+    ]:
+        target_mod = os.path.splitext(os.path.basename(first_arg))[0]
+        args_offset = 2
 
-# Bootstrapper para PyInstaller: Despacha scripts lanzados por subprocess
-if len(sys.argv) >= 2 and sys.argv[1].endswith('.py'):
-    script_to_run = sys.argv[1]
-    if os.path.exists(script_to_run):
-        sys.argv = [script_to_run] + sys.argv[2:]
+    if target_mod:
+        sys.argv = [target_mod] + sys.argv[args_offset:]
         import runpy
-        runpy.run_path(script_to_run, run_name='__main__')
+        executed = False
+        for mod_candidate in [f"Controllers.{target_mod}", target_mod]:
+            try:
+                runpy.run_module(mod_candidate, run_name='__main__', alter_sys=True)
+                executed = True
+                break
+            except Exception:
+                continue
+        if not executed:
+            # Fallback en desarrollo
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            file_candidates = [
+                os.path.join(base_dir, f"{target_mod}.py"),
+                os.path.join(base_dir, "Controllers", f"{target_mod}.py"),
+                first_arg
+            ]
+            for fc in file_candidates:
+                if os.path.exists(fc):
+                    try:
+                        runpy.run_path(fc, run_name='__main__')
+                        executed = True
+                        break
+                    except Exception:
+                        pass
         sys.exit(0)
 
+from PIL import ImageFile
+from asyncio import threads
 import ssl
 import re
 import platform
@@ -47,17 +97,43 @@ try:
     import certifi
     context = ssl.create_default_context(cafile=certifi.where())
     ssl._create_default_https_context = lambda: context
-    print("✅ [SSL] Contexto SSL configurado de forma segura con certifi.")
+    print(" [SSL] Contexto SSL configurado de forma segura con certifi.")
 except Exception as e:
-    print(f"⚠️ [SSL] No se pudo configurar certifi ({e}), usando bypass de compatibilidad.")
+    print(f" [SSL] No se pudo configurar certifi ({e}), usando bypass de compatibilidad.")
     ssl._create_default_https_context = ssl._create_unverified_context
 
+import requests as _requests
 from supabase import create_client, Client
 
 SUPABASE_URL = "https://zgfscbdbufiniezlkufn.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpnZnNjYmRidWZpbmllemxrdWZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1OTYyMzgsImV4cCI6MjA5NjE3MjIzOH0.S7BHJ1jiCgeACYREdC2rAVjsj-PzaOlcerVXwTuGvv8"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+def _update_supabase_directo(tabla: str, datos: dict, imei: str) -> bool:
+    """
+    Reintenta el UPDATE directamente vía REST cuando el trigger pg_net provoca
+    una excepción que hace rollback de la transacción supabase-py.
+    Devuelve True si el PATCH fue exitoso (2xx), False si no.
+    """
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/{tabla}?imei=eq.{imei}"
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal",
+        }
+        r = _requests.patch(url, json=datos, headers=headers, timeout=10)
+        if r.status_code in (200, 204):
+            print(f" [DirectPATCH] Update exitoso via REST para IMEI {imei}: {list(datos.keys())}")
+            return True
+        else:
+            print(f" [DirectPATCH] Respuesta inesperada ({r.status_code}): {r.text[:200]}")
+            return False
+    except Exception as e:
+        print(f" [DirectPATCH] Error en retry directo: {e}")
+        return False
 
 # Almacén global de tokens para restaurar la sesión tras reconexiones
 _session_tokens = {"access_token": None, "refresh_token": None}
@@ -80,13 +156,13 @@ def reset_supabase_client():
                     _session_tokens["access_token"],
                     _session_tokens["refresh_token"]
                 )
-                print("✅ [Supabase Auth] Conexión restablecida y sesión restaurada correctamente.")
+                print(" [Supabase Auth] Conexión restablecida y sesión restaurada correctamente.")
             except Exception as sess_err:
-                print(f"⚠️ [Supabase Auth] Sesión no restaurada tras reconexión: {sess_err}")
+                print(f" [Supabase Auth] Sesión no restaurada tras reconexión: {sess_err}")
         else:
-            print("✅ [Supabase Auth] Conexión de Supabase restablecida (sin sesión previa).")
+            print(" [Supabase Auth] Conexión de Supabase restablecida (sin sesión previa).")
     except Exception as e:
-        print(f"❌ Error restableciendo cliente Supabase: {e}")
+        print(f" Error restableciendo cliente Supabase: {e}")
 
 # Errores de red transitorios que disparan una reconexión
 _NET_ERRORS = ("broken pipe", "connection reset", "connection refused",
@@ -101,9 +177,9 @@ def safe_supabase(query_func):
         err_str = str(e).lower()
         is_net_error = any(kw in err_str for kw in _NET_ERRORS)
         if is_net_error:
-            print(f"⚠️ [Supabase Net] Error de red detectado ({str(e)}). Reconectando...")
+            print(f" [Supabase Net] Error de red detectado ({str(e)}). Reconectando...")
         else:
-            print(f"⚠️ [Supabase Auth/Net] Error detectado en consulta ({str(e)}). Re-estableciendo cliente...")
+            print(f" [Supabase Auth/Net] Error detectado en consulta ({str(e)}). Re-estableciendo cliente...")
         # Intentar refrescar sesión primero (menos intrusivo)
         try:
             supabase.auth.refresh_session()
@@ -113,7 +189,7 @@ def safe_supabase(query_func):
         try:
             return query_func()
         except Exception as retry_err:
-            print(f"❌ [Supabase Auth/Net] Error tras reintento en Supabase: {retry_err}")
+            print(f" [Supabase Auth/Net] Error tras reintento en Supabase: {retry_err}")
             raise retry_err
 
 _SELF_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -173,6 +249,8 @@ VIEWS_DIR       = os.path.join(PROJECT_ROOT, "Views")
 VIEWS_HTML      = os.path.join(VIEWS_DIR,    "html")
 VIEWS_ICONS     = os.path.join(VIEWS_DIR,    "icons")
 MODELS_DIR      = os.path.join(PROJECT_ROOT, "Models")
+_notif_history  = {}
+_notif_lock     = threading.Lock()
 # ──────────────────────────────────────────────────────────────────
 
 def resource_path(relative_path):
@@ -191,6 +269,7 @@ def resource_path(relative_path):
 def script_path(nombre_script):
     """
     Ruta a scripts .py auxiliares (GeneradorPDF, ConsultarModelo, etc.)
+    Mantenido por compatibilidad de ruta.
     """
     if hasattr(sys, '_MEIPASS'):
         # Buscar directamente en _MEIPASS
@@ -204,6 +283,42 @@ def script_path(nombre_script):
         return ruta
     return os.path.join(CONTROLLERS_DIR, nombre_script)
 
+def script_command(nombre_script):
+    """
+    Retorna la lista de argumentos base para ejecutar un submódulo de forma segura.
+    En PyInstaller congelado despacha el submódulo interno compilado en PYZ.
+    En desarrollo ejecuta el archivo .py correspondiente.
+    """
+    mod_name = os.path.splitext(os.path.basename(nombre_script))[0]
+    if getattr(sys, 'frozen', False):
+        return [sys.executable, '--run-module', mod_name]
+    else:
+        ruta_dev = os.path.join(CONTROLLERS_DIR, f"{mod_name}.py")
+        if os.path.exists(ruta_dev):
+            return [sys.executable, ruta_dev]
+        return [sys.executable, nombre_script]
+
+def run_subprocess_safe(cmd_args, timeout=None, **extra_kwargs):
+    """
+    Ejecuta un comando en subproceso con configuración segura para Windows (sin ventana de consola)
+    y manejo de codificación UTF-8 universal.
+    """
+    kw = {
+        'stdout': subprocess.PIPE,
+        'stderr': subprocess.PIPE,
+        'text': True,
+        'encoding': 'utf-8',
+        'errors': 'replace'
+    }
+    if sys.platform == "win32":
+        kw['creationflags'] = getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000)
+    kw.update(extra_kwargs)
+    proc = subprocess.Popen(cmd_args, **kw)
+    if timeout:
+        stdout, stderr = proc.communicate(timeout=timeout)
+        return proc, stdout, stderr
+    return proc
+
 def set_dock_icon(mode):
     try:
         icns_path = os.path.join(PROJECT_ROOT, "logoIMPdark.icns")
@@ -216,7 +331,7 @@ def set_dock_icon(mode):
         image = NSImage.alloc().initByReferencingFile_(icon_path)
         NSApp.setApplicationIconImage_(image)
     except Exception as e:
-        print(f"⚠️ [ICON] No se pudo cambiar el icono del Dock: {e}")
+        print(f" [ICON] No se pudo cambiar el icono del Dock: {e}")
 
 def obtener_puerto_libre(puerto_preferido=8089):
     try:
@@ -460,7 +575,7 @@ def limpiar_archivos_desechables(dias=1):
         if eliminados > 0:
             print(f"🧹 [Limpieza] Purga de archivos desechables (> {dias} día): {eliminados} archivos/carpetas eliminados.")
     except Exception as e_clean:
-        print(f"⚠️ [Limpieza] Error al limpiar temporales: {e_clean}")
+        print(f" [Limpieza] Error al limpiar temporales: {e_clean}")
 
     return eliminados
 
@@ -470,7 +585,7 @@ class Api:
         self.window = None
         self.current_user = None
         self._init_supabase_config()
-        print("✅ [API] Conectado a Supabase IMPDB.")
+        print(" [API] Conectado a Supabase IMPDB.")
         
         # Iniciar hilo de limpieza automática de temporales (> 1 día)
         def _loop_limpieza():
@@ -555,7 +670,7 @@ class Api:
             res = supabase.table('configuracion').select('clave').eq('clave', 'db_status').execute()
             if not res.data:
                 supabase.table('configuracion').insert({'clave': 'db_status', 'valor': 'active'}).execute()
-                print("✅ [SUPABASE] Configuración inicial (db_status=active) creada.")
+                print(" [SUPABASE] Configuración inicial (db_status=active) creada.")
             # Asegurar que los clientes 420 y 512 estén marcados como ocultos
             for cid in ['420', '512']:
                 try:
@@ -565,7 +680,7 @@ class Api:
                 except Exception:
                     pass
         except Exception as e:
-            print(f"⚠️ [SUPABASE] No se pudo verificar configuración inicial: {e}")
+            print(f" [SUPABASE] No se pudo verificar configuración inicial: {e}")
 
     # ── SEGURIDAD ──────────────────────────────────────────────────
 
@@ -603,44 +718,69 @@ class Api:
         email = usuario.strip()
         nombre = nombre.strip()
         if not email or not password:
-            return {"status": "error", "mensaje": "El usuario y la contraseña son obligatorios."}
+            return {"status": "error", "mensaje": "El correo electrónico y la contraseña son obligatorios."}
             
         if len(password) < 6:
             return {"status": "error", "mensaje": "La contraseña debe tener al menos 6 caracteres."}
-            
-        try:
-            # 1. Verificar si ya existe en la tabla 'usuarios'
-            existe_usuario = supabase.table('usuarios').select('usuario').ilike('usuario', email).execute()
-            if existe_usuario.data:
-                return {"status": "error", "mensaje": "Este usuario ya se encuentra registrado."}
 
-            # 2. Verificar si ya existe una solicitud pendiente
-            existe_solicitud = supabase.table('Solicitud').select('id').eq('Razon', 'solicitud_registro').eq('modelo', email).execute()
-            if existe_solicitud.data:
-                return {"status": "error", "mensaje": "Ya existe una solicitud de registro pendiente para este usuario."}
+        try:
+            nombre_display = nombre or email.split('@')[0]
             
-            # Registrar la solicitud en la tabla Solicitud
-            from datetime import datetime
-            data = {
-                'IMEI': password,
-                'Razon': 'solicitud_registro',
-                'modelo': email,
-                'descripcion': nombre or email,
-                'ingreso': datetime.now().astimezone().isoformat()
-            }
-            res = supabase.table('Solicitud').insert(data).execute()
-            
-            if res.data and self.window:
-                import json
-                notif_json = json.dumps(res.data[0])
-                self.window.evaluate_js(f"if (typeof window.recibirNotificacionRealtime === 'function') {{ window.recibirNotificacionRealtime({notif_json}); }}")
-                
+            # 1. Registro nativo directo en Supabase Auth
+            res_auth = None
+            try:
+                res_auth = supabase.auth.sign_up({
+                    "email": email,
+                    "password": password,
+                    "options": {
+                        "data": {
+                            "nombre": nombre_display,
+                            "rol": "user",
+                            "role": "user",
+                            "estado": "activo"
+                        }
+                    }
+                })
+            except Exception as e_auth:
+                err_str = str(e_auth)
+                print(f" [Registro] Aviso de Supabase Auth: {err_str}")
+                if "already registered" in err_str.lower() or "unique" in err_str.lower() or "already exists" in err_str.lower():
+                    return {"status": "error", "mensaje": "Este correo electrónico ya se encuentra registrado."}
+                elif "rate limit" in err_str.lower() or "over_email_send_rate_limit" in err_str.lower() or "security purposes" in err_str.lower():
+                    return {"status": "error", "mensaje": "Demasiados intentos. Por favor espera unos momentos antes de volver a intentar."}
+                elif "invalid" in err_str.lower() and "email" in err_str.lower():
+                    return {"status": "error", "mensaje": "Por favor ingresa un correo electrónico válido."}
+                return {"status": "error", "mensaje": f"Error al registrar usuario: {err_str}"}
+
+            # En Supabase Auth, si el usuario ya existía con confirmación previa, identities viene vacío
+            if res_auth and res_auth.user:
+                if hasattr(res_auth.user, 'identities') and res_auth.user.identities == []:
+                    return {"status": "error", "mensaje": "Este correo electrónico ya se encuentra registrado."}
+
+            # 2. Sincronizar simultáneamente en la tabla 'usuarios' para compatibilidad dual/offline
+            try:
+                salt = os.urandom(16).hex()
+                pwd_hash = self._hash_password(password, salt)
+                safe_supabase(lambda: supabase.table('usuarios').upsert({
+                    'usuario': email,
+                    'password_hash': pwd_hash,
+                    'salt': salt,
+                    'rol': 'user',
+                    'estado': 'activo'
+                }).execute())
+            except Exception as e_sync:
+                print(f" [Registro] Aviso sincronizando tabla usuarios: {e_sync}")
+
+            # 3. Guardar sesión si Supabase la devolvió inmediatamente
+            if res_auth and res_auth.session:
+                _store_session(res_auth.session.access_token, res_auth.session.refresh_token)
+
             return {
                 "status": "success",
-                "mensaje": "Solicitud de registro enviada con éxito. El administrador revisará y aprobará tu cuenta."
+                "mensaje": "¡Registro completado con éxito! Ya puedes iniciar sesión con tu cuenta."
             }
         except Exception as e:
-            return {"status": "error", "mensaje": f"Error al enviar la solicitud: {str(e)}"}
+            return {"status": "error", "mensaje": f"Error al procesar el registro: {str(e)}"}
 
     def aprobar_registro(self, notif_id, email, password):
         if not self._es_admin():
@@ -650,21 +790,34 @@ class Api:
             salt = os.urandom(16).hex()
             pwd_hash = self._hash_password(password, salt)
 
-            # Insertar en tabla pública usuarios
-            supabase.table('usuarios').insert({
+            # Insertar/actualizar en tabla pública usuarios
+            supabase.table('usuarios').upsert({
                 'usuario': email,
                 'password_hash': pwd_hash,
                 'salt': salt,
                 'rol': 'user',
                 'estado': 'activo'
             }).execute()
+
+            # Intentar crear en Supabase Auth si aún no existía
+            try:
+                supabase.auth.sign_up({
+                    "email": email,
+                    "password": password,
+                    "options": {"data": {"nombre": email.split('@')[0], "rol": "user", "estado": "activo"}}
+                })
+            except Exception:
+                pass
             
             # Eliminar la notificación de solicitud de registro
-            supabase.table('Solicitud').delete().eq('id', notif_id).execute()
+            try:
+                supabase.table('Solicitud').delete().eq('id', notif_id).execute()
+            except Exception:
+                pass
             
             return {
                 "status": "success", 
-                "mensaje": f"El registro de {email} ha sido aprobado y creado con éxito."
+                "mensaje": f"El registro de {email} ha sido aprobado y activado con éxito."
             }
         except Exception as e:
             err_msg = str(e)
@@ -678,13 +831,63 @@ class Api:
 
     def login_usuario(self, usuario, password):
         usuario = usuario.strip()
-        print(f"🔑 [API] login_usuario llamado con usuario: '{usuario}'")
+        print(f" [API] login_usuario llamado con usuario: '{usuario}'")
         if not usuario or not password:
             return {"status": "error", "mensaje": "El usuario y la contraseña son requeridos."}
         try:
             db_status = self._get_db_status()
-            
-            # 1. Intentar autenticación contra la tabla 'usuarios' personalizada
+            es_email = "@" in usuario
+
+            # 1. Si es formato correo electrónico, intentar autenticación nativa en Supabase Auth primero
+            if es_email:
+                try:
+                    res = supabase.auth.sign_in_with_password({"email": usuario, "password": password})
+                    user = res.user
+                    if user:
+                        print(f" [API] Autenticación exitosa en Supabase Auth para: {usuario}")
+                        metadata = user.user_metadata or {}
+                        if usuario.lower() == "martinmh0722@gmail.com":
+                            rol = "admin"
+                        else:
+                            rol = metadata.get("role") or metadata.get("rol") or "user"
+                        
+                        estado = metadata.get("status") or metadata.get("estado") or "activo"
+                        if estado == "suspendido":
+                            supabase.auth.sign_out()
+                            return {"status": "error", "mensaje": "Tu cuenta se encuentra suspendida."}
+                        elif estado == "pending" or rol == "pending":
+                            supabase.auth.sign_out()
+                            return {"status": "error", "mensaje": "Tu registro aún no ha sido aprobado por el administrador."}
+                            
+                        if db_status == 'paused' and rol != 'admin':
+                            supabase.auth.sign_out()
+                            return {
+                                "status": "paused",
+                                "mensaje": "El administrador ha puesto la base de datos en descanso temporal por mantenimiento."
+                            }
+                            
+                        nombre_usuario = metadata.get("nombre") or metadata.get("name") or usuario.split('@')[0]
+                        avatar_url = metadata.get("avatar_url") or metadata.get("foto_perfil") or ""
+
+                        self.current_user = {
+                            "usuario": usuario,
+                            "rol": rol,
+                            "nombre": nombre_usuario,
+                            "avatar_url": avatar_url,
+                            "access_token": res.session.access_token if res.session else None,
+                            "refresh_token": res.session.refresh_token if res.session else None
+                        }
+                        if res.session:
+                            _store_session(res.session.access_token, res.session.refresh_token)
+                        return {
+                            "status": "success",
+                            "user": self.current_user,
+                            "mensaje": f"Bienvenido de nuevo, {self.current_user['nombre']}."
+                        }
+                except Exception as auth_err:
+                    print(f" [API] Supabase Auth falló ({auth_err}), probando tabla de usuarios como fallback...")
+
+            # 2. Intentar autenticación contra la tabla 'usuarios' personalizada (usuarios sin correo o fallback)
             res_u = safe_supabase(lambda: supabase.table('usuarios').select('*').ilike('usuario', usuario).execute())
             if res_u and res_u.data:
                 user_rec = res_u.data[0]
@@ -692,96 +895,69 @@ class Api:
                 expected_hash = user_rec.get('password_hash', '')
                 calc_hash = self._hash_password(password, salt)
 
-                if calc_hash != expected_hash:
-                    print(f"❌ [API] Contraseña incorrecta para usuario: {usuario}")
-                    return {"status": "error", "mensaje": "Usuario o contraseña incorrectos."}
-
-                estado = user_rec.get('estado', 'activo')
-                if estado == "suspendido":
-                    return {"status": "error", "mensaje": "Tu cuenta se encuentra suspendida."}
-                elif estado == "pending":
-                    return {"status": "error", "mensaje": "Tu registro aún no ha sido aprobado por el administrador."}
-
-                rol = user_rec.get('rol', 'user')
-                if db_status == 'paused' and rol != 'admin':
-                    return {
-                        "status": "paused",
-                        "mensaje": "El administrador ha puesto la base de datos en descanso temporal por mantenimiento."
-                    }
-
-                self.current_user = {
-                    "usuario": user_rec.get('usuario', usuario),
-                    "rol": rol,
-                    "nombre": user_rec.get('usuario', usuario),
-                    "avatar_url": "",
-                    "access_token": None,
-                    "refresh_token": None
-                }
-                print(f"✅ [API] Autenticación exitosa en tabla usuarios para: {usuario} (Rol: {rol})")
-                return {
-                    "status": "success",
-                    "user": self.current_user,
-                    "mensaje": f"Bienvenido de nuevo, {self.current_user['usuario']}."
-                }
-
-            # 2. Fallback a Supabase Auth nativo (para cuentas tipo correo)
-            try:
-                res = supabase.auth.sign_in_with_password({"email": usuario, "password": password})
-                user = res.user
-                if user:
-                    print(f"✅ [API] Autenticación exitosa en Supabase Auth para: {usuario}")
-                    metadata = user.user_metadata or {}
-                    if usuario.lower() == "martinmh0722@gmail.com":
-                        rol = "admin"
-                    else:
-                        rol = metadata.get("role") or metadata.get("rol") or "user"
-                    
-                    estado = metadata.get("status") or metadata.get("estado") or "activo"
+                if calc_hash == expected_hash:
+                    estado = user_rec.get('estado', 'activo')
                     if estado == "suspendido":
-                        supabase.auth.sign_out()
                         return {"status": "error", "mensaje": "Tu cuenta se encuentra suspendida."}
-                    elif estado == "pending" or rol == "pending":
-                        supabase.auth.sign_out()
+                    elif estado == "pending":
                         return {"status": "error", "mensaje": "Tu registro aún no ha sido aprobado por el administrador."}
-                        
+
+                    rol = user_rec.get('rol', 'user')
                     if db_status == 'paused' and rol != 'admin':
-                        supabase.auth.sign_out()
                         return {
                             "status": "paused",
                             "mensaje": "El administrador ha puesto la base de datos en descanso temporal por mantenimiento."
                         }
-                        
-                    nombre_usuario = metadata.get("nombre") or metadata.get("name") or usuario.split('@')[0]
-                    avatar_url = metadata.get("avatar_url") or metadata.get("foto_perfil") or ""
 
                     self.current_user = {
-                        "usuario": usuario,
+                        "usuario": user_rec.get('usuario', usuario),
                         "rol": rol,
-                        "nombre": nombre_usuario,
-                        "avatar_url": avatar_url,
-                        "access_token": res.session.access_token if res.session else None,
-                        "refresh_token": res.session.refresh_token if res.session else None
+                        "nombre": user_rec.get('usuario', usuario),
+                        "avatar_url": "",
+                        "access_token": None,
+                        "refresh_token": None
                     }
-                    if res.session:
-                        _store_session(res.session.access_token, res.session.refresh_token)
+                    print(f" [API] Autenticación exitosa en tabla usuarios para: {usuario} (Rol: {rol})")
                     return {
                         "status": "success",
                         "user": self.current_user,
-                        "mensaje": f"Bienvenido de nuevo, {usuario}."
+                        "mensaje": f"Bienvenido de nuevo, {self.current_user['usuario']}."
                     }
-            except Exception as auth_err:
-                auth_str = str(auth_err)
-                if "Invalid login credentials" in auth_str:
-                    return {"status": "error", "mensaje": "Usuario o contraseña incorrectos."}
 
-            return {"status": "error", "mensaje": "Usuario no encontrado o credenciales incorrectas."}
+            # 3. Si no era correo pero falló tabla usuarios, probar Supabase Auth por si acaso
+            if not es_email:
+                try:
+                    res = supabase.auth.sign_in_with_password({"email": usuario, "password": password})
+                    user = res.user
+                    if user:
+                        metadata = user.user_metadata or {}
+                        rol = "admin" if usuario.lower() == "martinmh0722@gmail.com" else (metadata.get("role") or metadata.get("rol") or "user")
+                        self.current_user = {
+                            "usuario": usuario,
+                            "rol": rol,
+                            "nombre": metadata.get("nombre") or usuario,
+                            "avatar_url": metadata.get("avatar_url") or "",
+                            "access_token": res.session.access_token if res.session else None,
+                            "refresh_token": res.session.refresh_token if res.session else None
+                        }
+                        if res.session:
+                            _store_session(res.session.access_token, res.session.refresh_token)
+                        return {
+                            "status": "success",
+                            "user": self.current_user,
+                            "mensaje": f"Bienvenido de nuevo, {self.current_user['nombre']}."
+                        }
+                except Exception:
+                    pass
+
+            return {"status": "error", "mensaje": "Usuario o contraseña incorrectos."}
         except Exception as e:
             err_msg = str(e)
-            print(f"❌ [API] Excepción en login_usuario para '{usuario}': {err_msg}")
+            print(f" [API] Excepción en login_usuario para '{usuario}': {err_msg}")
             return {"status": "error", "mensaje": f"Error al iniciar sesión: {err_msg}"}
 
     def login_con_token(self, access_token, refresh_token):
-        print(f"🔑 [API] login_con_token llamado")
+        print(f" [API] login_con_token llamado")
         if not access_token or not refresh_token:
             return {"status": "error", "mensaje": "Tokens no válidos."}
         try:
@@ -821,14 +997,14 @@ class Api:
 
             # Si el avatar en user_metadata es gigante (>5KB), infla el JWT e inhabilita las consultas a Supabase
             if len(avatar_url) > 5000:
-                print("⚠️ [Supabase Auth] Avatar gigante detectado en metadata. Limpiando para reparar cabecera JWT...")
+                print(" [Supabase Auth] Avatar gigante detectado en metadata. Limpiando para reparar cabecera JWT...")
                 try:
                     res_fix = supabase.auth.update_user({"data": {"avatar_url": ""}})
                     avatar_url = ""
                     if res_fix and hasattr(res_fix, 'session') and res_fix.session:
                         res = res_fix
                 except Exception as fix_err:
-                    print(f"⚠️ [Supabase Auth] No se pudo auto-limpiar avatar antiguo: {fix_err}")
+                    print(f" [Supabase Auth] No se pudo auto-limpiar avatar antiguo: {fix_err}")
 
             self.current_user = {
                 "usuario": usuario,
@@ -848,7 +1024,7 @@ class Api:
             }
         except Exception as e:
             err_msg = str(e)
-            print(f"❌ [API] Excepción en login_con_token: {err_msg}")
+            print(f" [API] Excepción en login_con_token: {err_msg}")
             return {"status": "error", "mensaje": f"Sesión expirada o inválida: {err_msg}"}
 
     def guardar_sesion_local(self, datos):
@@ -859,10 +1035,10 @@ class Api:
             import json
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(datos, f, ensure_ascii=False, indent=2)
-            print(f"💾 [API] Sesión persistida en disco para: {datos.get('email') or datos.get('usuario')}")
+            print(f" [API] Sesión persistida en disco para: {datos.get('email') or datos.get('usuario')}")
             return {"status": "success"}
         except Exception as e:
-            print(f"⚠️ [API] Error guardando sesión en disco: {e}")
+            print(f" [API] Error guardando sesión en disco: {e}")
             return {"status": "error", "mensaje": str(e)}
 
     def obtener_sesion_local(self):
@@ -874,11 +1050,11 @@ class Api:
                 import json
                 with open(path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    print(f"🔑 [API] Sesión persistida recuperada de disco: {data.get('email') or data.get('usuario')}")
+                    print(f" [API] Sesión persistida recuperada de disco: {data.get('email') or data.get('usuario')}")
                     return {"status": "success", "session": data}
             return {"status": "empty", "session": None}
         except Exception as e:
-            print(f"⚠️ [API] Error leyendo sesión en disco: {e}")
+            print(f" [API] Error leyendo sesión en disco: {e}")
             return {"status": "error", "mensaje": str(e)}
 
     def eliminar_sesion_local(self):
@@ -888,7 +1064,7 @@ class Api:
             path = os.path.join(folder, "session_cache.json")
             if os.path.exists(path):
                 os.remove(path)
-            print("🗑️ [API] Sesión persistida eliminada de disco.")
+            print(" [API] Sesión persistida eliminada de disco.")
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
@@ -944,7 +1120,7 @@ class Api:
                 data = buf.getvalue()
                 mime = "image/jpeg"
             except Exception as img_err:
-                print(f"⚠️ [Avatar] Error optimizando avatar: {img_err}")
+                print(f" [Avatar] Error optimizando avatar: {img_err}")
                 mime = "image/png"
             b64 = base64.b64encode(data).decode("utf-8")
             data_url = f"data:{mime};base64,{b64}"
@@ -980,7 +1156,7 @@ class Api:
                     # Si no devuelve sesión, intentar refrescarla
                     supabase.auth.refresh_session()
             except Exception as sess_err:
-                print(f"⚠️ [Perfil] Aviso al re-establecer sesión: {sess_err}")
+                print(f" [Perfil] Aviso al re-establecer sesión: {sess_err}")
 
             # Actualizar current_user en memoria
             if self.current_user:
@@ -1075,7 +1251,7 @@ class Api:
         """Fuerza la reconexión con Supabase y reestablece la sesión del cliente."""
         if not self.current_user:
             return {"status": "error", "mensaje": "Se requiere iniciar sesión."}
-        print("🔄 [API] Forzando reconexión y reinicio con la Base de Datos...")
+        print("[API] Forzando reconexión y reinicio con la Base de Datos...")
         try:
             reset_supabase_client()
             status = self._get_db_status()
@@ -1085,7 +1261,7 @@ class Api:
                 "db_status": status
             }
         except Exception as e:
-            print(f"❌ [API] Error al reconectar la BD: {e}")
+            print(f" [API] Error al reconectar la BD: {e}")
             return {"status": "error", "mensaje": f"Error al reconectar BD: {str(e)}"}
 
     def cambiar_estado_bd(self, usuario_admin, nuevo_estado):
@@ -1133,7 +1309,7 @@ class Api:
                                 encargado_nombre = enc_item.get('nombre')
                                 break
                 except Exception as e_enc:
-                    print(f"⚠️ Error al buscar lineas_wom en encargados: {e_enc}")
+                    print(f"Error al buscar lineas_wom en encargados: {e_enc}")
 
             # 3. Si aún no hay encargado, buscar en la tabla 'registros' por IMEI
             if not encargado_nombre and imei:
@@ -1197,8 +1373,6 @@ class Api:
         os.makedirs(temp_dir, exist_ok=True)
         ruta_pantallazo = os.path.join(temp_dir, f"wom_{imei}.png") if con_pantallazo else None
 
-        ruta_script = script_path("RegistrarWom.py")
-
         # ── Guardar automáticamente en FastReg (Módulo de Registros) ──
         try:
             from datetime import datetime
@@ -1247,30 +1421,32 @@ class Api:
                 'RAZÓN': existente_fast.get('RAZÓN') or 'Registro WOM'
             }
             safe_supabase(lambda: supabase.table('FastReg').upsert(fast_payload).execute())
-            print(f"✅ [FastReg] Registro sincronizado en FastReg para IMEI {imei} (WOM)")
+            print(f"[FastReg] Registro sincronizado en FastReg para IMEI {imei} (WOM)")
 
             if linea_wom:
                 try:
                     safe_supabase(lambda: supabase.table('lineas').update({'las_use': ahora_iso}).eq('numero', str(linea_wom).strip()).execute())
                 except Exception as le:
-                    print(f"⚠️ Error actualizando las_use: {le}")
+                    print(f"Error actualizando las_use: {le}")
 
             if self.window:
                 self.window.evaluate_js("if (typeof window.recibirActualizacionFastReg === 'function') { window.recibirActualizacionFastReg(); }")
         except Exception as e_fast:
-            print(f"⚠️ Error guardando en FastReg (WOM): {e_fast}")
+            print(f"Error guardando en FastReg (WOM): {e_fast}")
         
         def run_bot():
             import json
             from datetime import datetime
             try:
-                cmd = [sys.executable, ruta_script, str(imei), str(linea_wom), str(documento),
-                       str(primer_nombre), str(segundo_nombre), str(primer_apellido), str(segundo_apellido)]
+                cmd = script_command("RegistrarWom.py") + [
+                    str(imei), str(linea_wom), str(documento),
+                    str(primer_nombre), str(segundo_nombre), str(primer_apellido), str(segundo_apellido)
+                ]
                 if ruta_pantallazo:
                     cmd.append(str(ruta_pantallazo))
                     if opciones_pantallazo:
                         cmd.append(json.dumps(opciones_pantallazo))
-                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
+                proc = run_subprocess_safe(cmd)
                 stdout, _ = proc.communicate()
                 resultado = {"status": "error", "mensaje": "Error de comunicación con Selenium."}
                 for line in stdout.splitlines():
@@ -1336,8 +1512,6 @@ class Api:
         temp_dir = os.path.join(base_dir, 'temp_screenshots')
         os.makedirs(temp_dir, exist_ok=True)
         ruta_pantallazo = os.path.join(temp_dir, f"etb_{imei}.png") if con_pantallazo else None
-
-        ruta_script = script_path("RegistrarEtb.py")
 
         # ── Guardar automáticamente en FastReg (Módulo de Registros) ──
         try:
@@ -1420,12 +1594,12 @@ class Api:
             import json
             from datetime import datetime
             try:
-                cmd = [sys.executable, ruta_script, str(imei), str(linea_etb)]
+                cmd = script_command("RegistrarEtb.py") + [str(imei), str(linea_etb)]
                 if ruta_pantallazo:
                     cmd.append(str(ruta_pantallazo))
                     if opciones_pantallazo:
                         cmd.append(json.dumps(opciones_pantallazo))
-                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
+                proc = run_subprocess_safe(cmd)
                 stdout, _ = proc.communicate()
                 resultado = {"status": "error", "mensaje": "Error de comunicación con Selenium ETB."}
                 for line in stdout.splitlines():
@@ -1578,11 +1752,32 @@ class Api:
 
     def _enviar_notificacion_nativa(self, titulo, mensaje, subtitulo=""):
         try:
+            import time
+            now = time.time()
+            dedup_key = f"{titulo}|{subtitulo}|{mensaje}".strip().lower()
+            with _notif_lock:
+                last_time = _notif_history.get(dedup_key, 0)
+                if now - last_time < 5.0:
+                    print(f"🔇 [Notificación Nativa] Descartada duplicada en ventana de 5s: {dedup_key}")
+                    return
+                _notif_history[dedup_key] = now
+                for k in list(_notif_history.keys()):
+                    if now - _notif_history[k] > 60:
+                        _notif_history.pop(k, None)
+
             titulo_clean = str(titulo or "IMEI Manager Pro").replace('"', '\\"').replace("'", "''")
             mensaje_clean = str(mensaje or "").replace('"', '\\"').replace("'", "''")
             subtitulo_clean = str(subtitulo or "").replace('"', '\\"').replace("'", "''")
 
-            # 1. macOS: AppleScript con sonido Glass
+            # Localizar logo oficial de la aplicación
+            icon_path = ""
+            for name in ["logo.png", "logoIMPlight.png", "logoIMPdark.png"]:
+                p = os.path.join(VIEWS_ICONS, name)
+                if os.path.exists(p):
+                    icon_path = os.path.abspath(p)
+                    break
+
+            # 1. macOS: AppleScript con display notification (directo al Centro de Notificaciones de macOS)
             if sys.platform == "darwin":
                 script = f'display notification "{mensaje_clean}" with title "{titulo_clean}"'
                 if subtitulo_clean:
@@ -1590,18 +1785,27 @@ class Api:
                 script += ' sound name "Glass"'
                 subprocess.Popen(['/usr/bin/osascript', '-e', script])
 
-            # 2. Windows: PowerShell WinRT Toast Notification (Moderno Win10/11) con Fallback a BalloonTip
+            # 2. Windows: PowerShell WinRT Toast Notification (Moderno Win10/11 con imagen de logo) con Fallback
             elif sys.platform.startswith("win") or sys.platform == "win32":
+                icon_path_win = icon_path.replace("\\", "/") if icon_path else ""
                 ps_script = f"""
                 $ErrorActionPreference = 'SilentlyContinue'
                 try {{
                     [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
-                    $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+                    $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastImageAndText02)
                     $textNodes = $template.GetElementsByTagName('text')
                     $titleText = '{titulo_clean}'
                     if ('{subtitulo_clean}') {{ $titleText = '{titulo_clean} - {subtitulo_clean}' }}
                     $textNodes.Item(0).AppendChild($template.CreateTextNode($titleText)) | Out-Null
                     $textNodes.Item(1).AppendChild($template.CreateTextNode('{mensaje_clean}')) | Out-Null
+
+                    if ('{icon_path_win}' -and (Test-Path '{icon_path_win}')) {{
+                        $imgNodes = $template.GetElementsByTagName('image')
+                        if ($imgNodes.Length -gt 0) {{
+                            $imgNodes.Item(0).Attributes.GetNamedItem('src').NodeValue = '{icon_path_win}'
+                        }}
+                    }}
+
                     $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
                     [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('IMEI Manager Pro').Show($toast)
                 }} catch {{
@@ -1623,7 +1827,10 @@ class Api:
             # 3. Linux
             elif sys.platform.startswith("linux"):
                 full_msg = f"{subtitulo_clean}\n{mensaje_clean}" if subtitulo_clean else mensaje_clean
-                subprocess.Popen(['notify-send', titulo_clean, full_msg])
+                cmd = ['notify-send', titulo_clean, full_msg]
+                if icon_path and os.path.exists(icon_path):
+                    cmd.extend(['-i', icon_path])
+                subprocess.Popen(cmd)
             else:
                 print(f"🔔 [Notificación Nativa]: {titulo_clean} - {subtitulo_clean} - {mensaje_clean}")
         except Exception as e:
@@ -1784,11 +1991,20 @@ class Api:
                             descripcion = notif.get('Descripción') or notif.get('descripcion') or notif.get('Descripcion') or notif.get('mensaje') or notif.get('Mensaje') or ''
 
                             titulo_nativ = "IMEI Manager Pro"
-                            if descripcion and str(descripcion).startswith("Nueva solicitud"):
+                            razon_lower = str(razon).strip().lower()
+
+                            if razon_lower == "solicitud_registro":
+                                sub_nativ = "Solicitud de Registro"
+                                msg_nativ = f"Nuevo usuario: {modelo or descripcion}"
+                            elif "solicitud" in razon_lower:
                                 sub_nativ = "Nueva Solicitud"
-                                msg_nativ = str(descripcion)
+                                partes = []
+                                if modelo: partes.append(str(modelo))
+                                if imei: partes.append(f"IMEI: {imei}")
+                                if descripcion and str(descripcion) not in (str(imei), str(modelo)): partes.append(f"({descripcion})")
+                                msg_nativ = " | ".join(partes) if partes else f"Nueva solicitud registrada: {razon}"
                             elif imei:
-                                sub_nativ = f"Nueva Solicitud ({razon})"
+                                sub_nativ = f"Nueva Notificación ({razon})"
                                 msg_nativ = f"IMEI: {imei}" + (f" | {modelo}" if modelo else "")
                             elif descripcion:
                                 sub_nativ = f"Centro de Notificaciones ({razon})"
@@ -1840,9 +2056,6 @@ class Api:
             from datetime import datetime
             modelo = new_reg.get('modelo') or 'Dispositivo'
             razon_orig = (new_reg.get('razon') or '').lower()
-            # Verificar primero "desbloqueo" antes de "bloqueo", ya que
-            # "bloqueo" in "desbloqueo" es True en Python y causaría una
-            # clasificación incorrecta.
             if "desbloqueo" in razon_orig or "no registro" in razon_orig:
                 razon_notif = "Desbloqueo"
             elif "bloqueo" in razon_orig:
@@ -1856,12 +2069,13 @@ class Api:
                 'ingreso': datetime.now().astimezone().isoformat()
             }
             try:
-                res = supabase.table('Solicitud').insert(data).execute()
+                # Si el trigger de BD ya registró esta notificación recientemente, evitar duplicar
+                check_res = safe_supabase(lambda: supabase.table('Solicitud').select('id').eq('IMEI', str(imei)).order('id', desc=True).limit(1).execute())
+                if check_res and check_res.data:
+                    print(f"ℹ️ [NOTIFICACIÓN] Notificación ya presente en BD para IMEI {imei}.")
+                    return
+                supabase.table('Solicitud').insert(data).execute()
                 print(f"✅ [NOTIFICACIÓN] Registrada para IMEI {imei}")
-                if self.window and res.data:
-                    import json
-                    notif_json = json.dumps(res.data[0])
-                    self.window.evaluate_js(f"if (typeof window.recibirNotificacionRealtime === 'function') {{ window.recibirNotificacionRealtime({notif_json}); }}")
             except Exception as ne:
                 print(f"❌ [NOTIFICACIÓN] Error al registrar: {ne}")
 
@@ -1972,9 +2186,14 @@ class Api:
                 err_str = str(ue)
                 print(f"⚠️ [Hook] Advertencia al actualizar campo '{campo}' en BD: {err_str}")
                 if "schema \"net\" does not exist" in err_str or "3F000" in err_str:
-                    print("💡 [Trigger BD] Nota: El trigger en Supabase requiere la extensión pg_net o manejar EXCEPTION.")
-                    return {"status": "success", "advertencia": "Campo actualizado (trigger de BD requiere pg_net)"}
-                raise ue
+                    print("💡 [Trigger BD] Trigger pg_net falló — reintentando con REST directo...")
+                    ok = _update_supabase_directo('registros', {campo: valor}, imei)
+                    if not ok:
+                        print(f"❌ [Hook] No se pudo guardar '{campo}' ni con retry directo.")
+                        return {"status": "error", "mensaje": f"No se pudo guardar el campo '{campo}' en la base de datos (trigger pg_net no disponible)."}
+                    # Continuar con la lógica de notificación aunque el trigger falló
+                else:
+                    raise ue
 
             try:
                 if old_reg:
@@ -2152,22 +2371,11 @@ class Api:
         """
         import json as _json
         try:
-            ruta_script = script_path("ConsultarModeloPro.py")
-            if not os.path.exists(ruta_script):
-                return {"status": "error", "mensaje": "Script ConsultarModeloPro.py no encontrado."}
-
-            cmd = [sys.executable, ruta_script, str(imei)]
+            cmd = script_command("ConsultarModeloPro.py") + [str(imei)]
             if con_pantallazo:
                 cmd.append("--screenshot")
 
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8"
-            )
-            stdout, _ = proc.communicate(timeout=60)
+            proc, stdout, _ = run_subprocess_safe(cmd, timeout=60)
 
             for line in reversed(stdout.splitlines()):
                 line = line.strip()
@@ -2178,6 +2386,9 @@ class Api:
             return {"status": "error", "mensaje": "Sin respuesta válida del script."}
         except subprocess.TimeoutExpired:
             return {"status": "error", "mensaje": "Tiempo de espera agotado (60s)."}
+        except Exception as e:
+            return {"status": "error", "mensaje": str(e)}
+
     def consultar_modelo_estandar(self, imei):
         """
         Ejecuta ConsultarModelo.py como subprocess.
@@ -2185,20 +2396,8 @@ class Api:
         """
         import json as _json
         try:
-            ruta_script = script_path("ConsultarModelo.py")
-            if not os.path.exists(ruta_script):
-                return {"status": "error", "mensaje": "Script ConsultarModelo.py no encontrado."}
-
-            cmd = [sys.executable, ruta_script, str(imei), "--headless"]
-
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8"
-            )
-            stdout, stderr = proc.communicate(timeout=60)
+            cmd = script_command("ConsultarModelo.py") + [str(imei), "--headless"]
+            proc, stdout, stderr = run_subprocess_safe(cmd, timeout=60)
 
             for line in reversed(stdout.splitlines()):
                 line = line.strip()
@@ -2227,20 +2426,8 @@ class Api:
         """
         import json as _json
         try:
-            ruta_script = script_path("ConsultarModeloPro.py")
-            if not os.path.exists(ruta_script):
-                # Fallback: leer JSON directamente
-                return self._leer_estado_cupos_directo()
-
-            cmd = [sys.executable, ruta_script, "--estado"]
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8"
-            )
-            stdout, _ = proc.communicate(timeout=10)
+            cmd = script_command("ConsultarModeloPro.py") + ["--estado"]
+            proc, stdout, _ = run_subprocess_safe(cmd, timeout=10)
 
             for line in reversed(stdout.splitlines()):
                 line = line.strip()
@@ -2355,20 +2542,11 @@ class Api:
         for imei in imeis:
             self.actualizar_campo(imei, "modelo", "Consultando...")
 
-        ruta_script = script_path("ConsultarModeloPro.py")
-
         def _bg():
             for imei in imeis:
                 try:
-                    cmd = [sys.executable, ruta_script, str(imei)]
-                    proc = subprocess.Popen(
-                        cmd,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        text=True,
-                        encoding="utf-8"
-                    )
-                    stdout, _ = proc.communicate(timeout=60)
+                    cmd = script_command("ConsultarModeloPro.py") + [str(imei)]
+                    proc, stdout, _ = run_subprocess_safe(cmd, timeout=60)
 
                     for line in reversed(stdout.splitlines()):
                         line = line.strip()
@@ -2414,23 +2592,14 @@ class Api:
     def consultar_modelo(self, imei):
         try:
             import json as _json
-            import os, sys, subprocess
-
             _INVALID_MODELS = {"error", "no encontrado", "desconocido", "null", "undefined", ""}
 
-            ruta_script = script_path("ConsultarModelo.py")
-
-            if not os.path.exists(ruta_script):
-                return {"status": "error", "mensaje": "Script de modelo no encontrado."}
-
-            cmd = [sys.executable, ruta_script, str(imei), "--headless"]
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
-            stdout, _ = proc.communicate()
+            cmd = script_command("ConsultarModelo.py") + [str(imei), "--headless"]
+            proc, stdout, _ = run_subprocess_safe(cmd, timeout=60)
 
             for line in reversed(stdout.splitlines()):
                 if line.strip().startswith('{'):
                     data = _json.loads(line)
-                    # Si el script mismo reporta error, devolvemos error
                     if data.get("status") == "error":
                         return {"status": "error", "mensaje": data.get("mensaje", "Modelo no encontrado.")}
                     modelo = (data.get("modelo") or "").strip()
@@ -2451,39 +2620,37 @@ class Api:
             modo = parametros.get('modo', 'anonimo')
             datos_pdf = parametros.get('datos_pdf')
 
-            ruta_script_etb = script_path("RegistrarEtb.py")
-
-            if not os.path.exists(ruta_script_etb):
-                return {"status": "error", "mensaje": f"Script ETB no encontrado."}
-
             # 1. Ejecutar el registro de ETB
-            args_etb = [sys.executable, ruta_script_etb, imei, linea]
-            proceso_etb = subprocess.run(args_etb, capture_output=True, text=True, encoding='utf-8')
+            args_etb = script_command("RegistrarEtb.py") + [imei, linea]
+            proc_etb, stdout_etb, _ = run_subprocess_safe(args_etb, timeout=90)
             
             salida_final = {"status": "error", "mensaje": "Sin respuesta válida de ETB."}
-            lineas = proceso_etb.stdout.strip().split('\n')
+            lineas = stdout_etb.strip().split('\n')
             for linea_texto in reversed(lineas):
                 if linea_texto.strip().startswith('{'):
-                    salida_final = json.loads(linea_texto.strip())
-                    break
+                    try:
+                        salida_final = json.loads(linea_texto.strip())
+                        break
+                    except Exception:
+                        pass
 
             # 2. Si ETB fue exitoso y el modo es estandar o detallada, llamar al GeneradorPDF
             if salida_final.get("status") == "success" and modo in ["estandar", "detallada"] and datos_pdf:
-                ruta_script_pdf = script_path("GeneradorPDF.py")
+                datos_pdf['modo'] = modo
+                args_pdf = script_command("GeneradorPDF.py") + [json.dumps(datos_pdf)]
+                proc_pdf, stdout_pdf, _ = run_subprocess_safe(args_pdf, timeout=60)
                 
-                if os.path.exists(ruta_script_pdf):
-                    datos_pdf['modo'] = modo
-                    args_pdf = [sys.executable, ruta_script_pdf, json.dumps(datos_pdf)]
-                    proceso_pdf = subprocess.run(args_pdf, capture_output=True, text=True, encoding='utf-8')
-                    
-                    for linea_pdf in reversed(proceso_pdf.stdout.strip().split('\n')):
-                        if linea_pdf.strip().startswith('{'):
+                for linea_pdf in reversed(stdout_pdf.strip().split('\n')):
+                    if linea_pdf.strip().startswith('{'):
+                        try:
                             res_pdf = json.loads(linea_pdf.strip())
                             if res_pdf.get("status") == "success":
                                 salida_final["pdf_ruta"] = res_pdf.get("ruta")
                                 salida_final["mensaje"] += " (PDF generado)"
                                 abrir_archivo(res_pdf.get("ruta"))
                             break
+                        except Exception:
+                            pass
 
             return salida_final
 
@@ -2513,14 +2680,12 @@ class Api:
             }
             
             import json, subprocess, sys, os
-            ruta_script_pdf = script_path("GeneradorPDF.py")
+            args_pdf = script_command("GeneradorPDF.py") + [json.dumps(datos)]
+            proc_pdf, stdout_pdf, _ = run_subprocess_safe(args_pdf, timeout=60)
             
-            if os.path.exists(ruta_script_pdf):
-                args_pdf = [sys.executable, ruta_script_pdf, json.dumps(datos)]
-                proceso_pdf = subprocess.run(args_pdf, capture_output=True, text=True, encoding='utf-8')
-                
-                for linea_pdf in reversed(proceso_pdf.stdout.strip().split('\n')):
-                    if linea_pdf.strip().startswith('{'):
+            for linea_pdf in reversed(stdout_pdf.strip().split('\n')):
+                if linea_pdf.strip().startswith('{'):
+                    try:
                         res_pdf = json.loads(linea_pdf.strip())
                         if res_pdf.get("status") == "success":
                             output = res_pdf.get("ruta")
@@ -2528,7 +2693,9 @@ class Api:
                             return {"status": "success", "ruta": output, "mensaje": "Declaración general generada en Descargas."}
                         else:
                             return {"status": "error", "mensaje": res_pdf.get("mensaje", "Error al generar")}
-            return {"status": "error", "mensaje": "Script GeneradorPDF no encontrado."}
+                    except Exception:
+                        pass
+            return {"status": "error", "mensaje": "No se pudo generar la declaración en PDF."}
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
 
@@ -3127,6 +3294,7 @@ end tell
             except Exception as he:
                 print(f"⚠️ [Hook] Error fetching old record in actualizar_imei: {he}")
 
+            trigger_fallo = False
             try:
                 supabase.table('registros').update({
                     'estado': estado,
@@ -3136,19 +3304,24 @@ end tell
                 err_str = str(ue)
                 print(f"⚠️ [Hook] Advertencia al actualizar BD en actualizar_imei: {err_str}")
                 if "schema \"net\" does not exist" in err_str or "3F000" in err_str:
-                    print("💡 [Trigger BD] Nota: El trigger trigger_cambio_estado en Supabase requiere la extensión pg_net o manejar EXCEPTION.")
-                    return {
-                        "status": "success",
-                        "estado": estado,
-                        "operador": operador,
-                        "advertencia": "Estado consultado exitosamente. Nota: El trigger de BD requiere habilitar pg_net en Supabase."
-                    }
-                raise ue
+                    print("💡 [Trigger BD] Trigger pg_net falló — reintentando con REST directo...")
+                    ok = _update_supabase_directo('registros', {'estado': estado, 'operador': operador}, imei)
+                    if not ok:
+                        return {"status": "error", "mensaje": "No se pudo guardar el estado en la base de datos (trigger pg_net no disponible)."}
+                    trigger_fallo = True
+                else:
+                    raise ue
 
+            # Crear notificación si el estado cambió a exitoso (funciona aunque el trigger haya fallado)
             try:
                 new_res = supabase.table('registros').select('*').eq('imei', imei).execute()
                 new_reg = new_res.data[0] if new_res.data else None
-                if old_reg and new_reg:
+                if not new_reg:
+                    # Si no podemos leer desde la BD (puede pasar si el retry fue directo), construir new_reg manualmente
+                    new_reg = dict(old_reg) if old_reg else {}
+                    new_reg['estado'] = estado
+                    new_reg['operador'] = operador
+                if old_reg:
                     self._crear_notificacion_si_cambia_a_exitoso(imei, old_reg, new_reg)
             except Exception as he:
                 print(f"⚠️ [Hook] Error checking transition in actualizar_imei: {he}")
@@ -3171,12 +3344,9 @@ end tell
                 img = Image.open(ruta)
                 width, height = img.size
                 
-                # Recorte del 60% inferior, dejando el 40% superior
-                cropped = img.crop((0, 0, width, int(height * 0.40)))
-                
                 text_height = 140
-                new_img = Image.new("RGB", (width, cropped.height + text_height), "#1a1b26")
-                new_img.paste(cropped, (0, 0))
+                new_img = Image.new("RGB", (width, height + text_height), "#1a1b26")
+                new_img.paste(img, (0, 0))
                 
                 draw = ImageDraw.Draw(new_img)
                 font_large, font_normal = _load_system_font(36, 28)
@@ -3186,17 +3356,17 @@ end tell
                 estado = info.get("estado", "N/A") or "N/A"
                 operador = info.get("operador", "") or ""
                 
-                # Draw text layout
-                draw.text((40, cropped.height + 25), f"IMEI: {imei}", font=font_large, fill="#7aa2f7")
-                draw.text((40, cropped.height + 80), f"Modelo: {modelo}", font=font_normal, fill="#a9b1d6")
+                # Layout de datos inferior
+                draw.text((40, height + 25), f"IMEI: {imei}", font=font_large, fill="#7aa2f7")
+                draw.text((40, height + 80), f"Modelo: {modelo}", font=font_normal, fill="#a9b1d6")
                 
                 estado_color = "#f7768e"
-                if str(estado).lower() in ["limpio", "disponible", "sin reporte"]:
+                if str(estado).lower() in ["limpio", "disponible", "sin reporte", "libre"]:
                     estado_color = "#9ece6a"
                 
-                draw.text((width // 2, cropped.height + 25), f"Estado: {estado}", font=font_large, fill=estado_color)
+                draw.text((width // 2, height + 25), f"Estado: {estado}", font=font_large, fill=estado_color)
                 if operador:
-                    draw.text((width // 2, cropped.height + 80), f"Operador: {operador}", font=font_normal, fill="#bb9af7")
+                    draw.text((width // 2, height + 80), f"Operador: {operador}", font=font_normal, fill="#bb9af7")
                 
                 new_img.save(ruta)
 
@@ -3331,54 +3501,7 @@ end tell
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
 
-    # ── MODELOS ────────────────────────────────────────────────────
-
-    def consultar_modelos(self, imeis, headless: bool = False):
-        import json as _json
-        for imei in imeis:
-            self.actualizar_campo(imei, 'modelo', 'Consultando...')
-        ruta_script = script_path("ConsultarModelo.py")
-        def _bg():
-            try:
-                cmd = [sys.executable, ruta_script] + [str(i) for i in imeis]
-                if headless:
-                    cmd.append("--headless")
-                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                for line in proc.stdout:
-                    line = line.strip()
-                    if not line: continue
-                    try:
-                        data = _json.loads(line)
-                        imei_r = data.get("imei", "")
-                        modelo = data.get("modelo", "")
-                        if imei_r and modelo:
-                            self.actualizar_campo(
-                                imei_r, 'modelo',
-                                modelo if not modelo.startswith("Error") else 'Error'
-                            )
-                    except _json.JSONDecodeError:
-                        pass
-                proc.wait()
-            except Exception:
-                pass
-        threading.Thread(target=_bg, daemon=True).start()
-        return {"status": "success", "mensaje": "Consulta iniciada en segundo plano"}
-
-    def consultar_modelo_solo(self, imei):
-        try:
-            import json as _json
-            ruta_script = script_path("ConsultarModelo.py")
-            cmd = [sys.executable, ruta_script, str(imei), "--headless"]
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            stdout, _ = proc.communicate()
-            for line in stdout.splitlines():
-                if line.startswith('{'):
-                    data = _json.loads(line)
-                    if data.get("modelo"):
-                        return {"status": "success", "modelo": data["modelo"]}
-            return {"status": "error", "mensaje": "Modelo no encontrado"}
-        except Exception as e:
-            return {"status": "error", "mensaje": str(e)}
+    # ── BLACKLIST GSMA ─────────────────────────────────────────────
 
     def consultar_blacklist(self, imei, con_pantallazo=False):
         """
@@ -3388,26 +3511,11 @@ end tell
         """
         import json as _json
         try:
-            ruta_script = script_path("blacklist.py")
-            if not os.path.exists(ruta_script):
-                return {"status": "error", "mensaje": "Script blacklist.py no encontrado."}
-
-            cmd = [sys.executable, ruta_script, str(imei)]
+            cmd = script_command("blacklist.py") + [str(imei)]
             if con_pantallazo:
                 cmd.append("--screenshot")
 
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8"
-            )
-            try:
-                stdout, _ = proc.communicate(timeout=90)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                return {"status": "error", "mensaje": "Tiempo de espera agotado (90s)."}
+            proc, stdout, _ = run_subprocess_safe(cmd, timeout=90)
 
             # Parsear última línea JSON válida
             data = None
@@ -3433,7 +3541,8 @@ end tell
                     print(f"⚠️ [Blacklist] Error al guardar en Supabase: {se}")
 
             return data
-
+        except subprocess.TimeoutExpired:
+            return {"status": "error", "mensaje": "Tiempo de espera agotado (90s)."}
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
 
@@ -3444,19 +3553,8 @@ end tell
         """
         import json as _json
         try:
-            ruta_script = script_path("blacklist.py")
-            if not os.path.exists(ruta_script):
-                return self._leer_estado_cupos_blacklist_directo()
-
-            cmd = [sys.executable, ruta_script, "--estado"]
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8"
-            )
-            stdout, _ = proc.communicate(timeout=10)
+            cmd = script_command("blacklist.py") + ["--estado"]
+            proc, stdout, _ = run_subprocess_safe(cmd, timeout=10)
 
             for line in reversed(stdout.splitlines()):
                 line = line.strip()
@@ -4168,17 +4266,18 @@ end tell
                         'modo': tipo_decl,
                         'salida_dir': _output_dir
                     }
-                    ruta_script_pdf = script_path("GeneradorPDF.py")
-                    if os.path.exists(ruta_script_pdf):
-                        args_pdf = [sys.executable, ruta_script_pdf, json.dumps(datos_pdf)]
-                        proceso_pdf = subprocess.run(args_pdf, capture_output=True, text=True, encoding='utf-8')
-                        for linea_pdf in reversed(proceso_pdf.stdout.strip().split('\n')):
-                            if linea_pdf.strip().startswith('{'):
+                    args_pdf = script_command("GeneradorPDF.py") + [json.dumps(datos_pdf)]
+                    proc_pdf, stdout_pdf, _ = run_subprocess_safe(args_pdf, timeout=60)
+                    for linea_pdf in reversed(stdout_pdf.strip().split('\n')):
+                        if linea_pdf.strip().startswith('{'):
+                            try:
                                 res_pdf = json.loads(linea_pdf.strip())
                                 if res_pdf.get("status") == "success":
                                     pdf_ruta = res_pdf.get("ruta")
                                     abrir_archivo(pdf_ruta)
                                 break
+                            except Exception:
+                                pass
                 
                 # Inserción en DB
                 data = {
@@ -4424,10 +4523,8 @@ end tell
                                     'modo': tipo_declaracion,
                                     'salida_dir': out_dir
                                 }
-                                ruta_script_pdf = script_path("GeneradorPDF.py")
-                                if os.path.exists(ruta_script_pdf):
-                                    subprocess.run([sys.executable, ruta_script_pdf, json.dumps(datos_pdf)],
-                                                   capture_output=True, text=True, encoding='utf-8')
+                                args_pdf = script_command("GeneradorPDF.py") + [json.dumps(datos_pdf)]
+                                run_subprocess_safe(args_pdf, timeout=60)
                             except Exception as pe:
                                 print(f"Error generando PDF/constancia masivo item {imei_val}: {pe}")
 

@@ -185,9 +185,15 @@ function toggleTheme() {
 function hideSplash() {
     const s = document.getElementById('splashOverlay');
     if (!s) return;
+    const wrap = document.getElementById('splashWrap');
+    if (wrap) {
+        wrap.style.transition = 'opacity 0.4s ease, transform 0.4s cubic-bezier(0.4,0,0.2,1)';
+        wrap.style.opacity = '0';
+        wrap.style.transform = 'scale(0.96) translateY(-4px)';
+    }
     s.style.opacity = '0';
     s.style.pointerEvents = 'none';
-    setTimeout(() => { s.style.display = 'none'; }, 520);
+    setTimeout(() => { s.style.display = 'none'; }, 560);
 }
 
 async function initApp() {
@@ -1506,40 +1512,27 @@ function guardarNuevaLineaManualModal() {
 function procesarCambioEstadoBloqueo(reg, oldEstado, newEstado, newOperador, index) {
     if (!reg) return;
 
-    const oldEst = (oldEstado || '').trim().toLowerCase();
-    const newEst = (newEstado || '').trim().toLowerCase();
-
-    // Si ya se envió el correo o se creó el archivo (está en amarillo), NO volver a pedir PIN o línea
-    const yaProcesado = !!(
-        (reg.fecha_declaracion_generada && String(reg.fecha_declaracion_generada).trim() !== '') ||
-        (reg.ruta_declaracion_generada && String(reg.ruta_declaracion_generada).trim() !== '') ||
-        (reg.fecha_correo_wom && String(reg.fecha_correo_wom).trim() !== '') ||
-        reg.correo_enviado ||
-        reg.archivo_creado ||
-        reg.pdf_generado ||
-        evaluarNeon(reg) === 'neon-amarillo'
-    );
-    if (yaProcesado) {
-        return;
-    }
-
-    const eraBloqueado = oldEst.includes('robo') || oldEst.includes('hurto') || oldEst.includes('extravi') || oldEst.includes('no registrado');
+    const newEst = (newEstado || reg.estado || '').trim().toLowerCase();
     const esRoboExtravio = newEst.includes('robo') || newEst.includes('hurto') || newEst.includes('extravi') || newEst.includes('no registrado');
+    if (!esRoboExtravio) return;
 
-    // Condición: si antes no estaba bloqueado (o si era libre / consultando) y ahora es Robo/hurto o Extravío
-    if ((!eraBloqueado || oldEst === 'libre' || oldEst === 'consultando...' || oldEst === '') && esRoboExtravio) {
-        const op = (newOperador || reg.operador || '').toLowerCase();
-        const idx = (index !== undefined && index !== null && index > -1) ? index : registros.findIndex(r => r.imei === reg.imei);
+    const op = (newOperador || reg.operador || '').toLowerCase();
+    const idx = (index !== undefined && index !== null && index > -1) ? index : registros.findIndex(r => r.imei === reg.imei);
 
-        if (op.includes('etb')) {
+    if (op.includes('etb')) {
+        const tieneLinea = reg.linea && String(reg.linea).trim() !== '' && String(reg.linea).trim() !== 'null';
+        if (!tieneLinea) {
             if (idx > -1) {
                 indiceDetallesActual = idx;
                 abrirDetalles(idx);
                 setTimeout(() => {
                     abrirSelectorLineaWidget('ETB');
-                }, 150);
+                }, 200);
             }
-        } else if (op.includes('wom')) {
+        }
+    } else if (op.includes('wom')) {
+        const tienePin = reg.pin_desbloqueo && String(reg.pin_desbloqueo).trim() !== '' && String(reg.pin_desbloqueo).trim() !== 'null';
+        if (!tienePin) {
             if (idx > -1) {
                 indiceDetallesActual = idx;
                 abrirDetalles(idx);
@@ -1553,7 +1546,7 @@ function procesarCambioEstadoBloqueo(reg, oldEstado, newEstado, newOperador, ind
             if (inpEl) inpEl.value = "";
             const pinOverlay = document.getElementById('pinOverlay');
             if (pinOverlay) pinOverlay.classList.add('active');
-            setTimeout(() => { if (inpEl) inpEl.focus(); }, 150);
+            setTimeout(() => { if (inpEl) inpEl.focus(); }, 200);
         }
     }
 }
@@ -2036,6 +2029,7 @@ async function eliminarEncargadoDesdeMenu() {
 function cerrarDetalles() {
     document.getElementById('detallesOverlay').classList.remove('active');
     document.getElementById('encargadoContextMenu').classList.remove('show');
+    indiceDetallesActual = null;
 }
 
 async function guardarDetalle(campo) {
@@ -2258,11 +2252,37 @@ async function forzarScraper(imei, index) {
         const res = await window.pywebview.api.actualizar_imei(imei, headlessEnabled);
         hideToastLoading();
         if (res.status === "success") {
+            const nuevoEstado = (res.estado || '').toLowerCase();
+            const eraAmarillo = (() => {
+                const r = registros[targetIdx];
+                return !!(
+                    (r.fecha_correo_wom && String(r.fecha_correo_wom).trim() !== '' && String(r.fecha_correo_wom).trim() !== 'null') ||
+                    (r.fecha_declaracion_generada && String(r.fecha_declaracion_generada).trim() !== '' && String(r.fecha_declaracion_generada).trim() !== 'null') ||
+                    r.correo_enviado === true || r.correo_enviado === 'true' || r.correo_enviado === 1 ||
+                    r.archivo_creado === true || r.archivo_creado === 'true' || r.archivo_creado === 1 ||
+                    r.pdf_generado === true || r.pdf_generado === 'true' || r.pdf_generado === 1
+                );
+            })();
+
             registros[targetIdx].estado = res.estado;
             registros[targetIdx].operador = res.operador;
+
+            // Si el registro estaba en amarillo (en proceso) y ahora es Libre → limpiar flags
+            if (eraAmarillo && (nuevoEstado.includes('libre') || nuevoEstado.includes('desbloquead'))) {
+                registros[targetIdx].fecha_correo_wom = null;
+                registros[targetIdx].fecha_declaracion_generada = null;
+                registros[targetIdx].ruta_declaracion_generada = null;
+                registros[targetIdx].correo_enviado = false;
+                registros[targetIdx].archivo_creado = false;
+                registros[targetIdx].pdf_generado = false;
+            }
+
             renderizarTabla();
             if (indiceDetallesActual === targetIdx) {
                 abrirDetalles(targetIdx);
+                if (typeof actualizarWidgetInteligente === 'function') {
+                    actualizarWidgetInteligente(registros[targetIdx]);
+                }
             }
             procesarCambioEstadoBloqueo(registros[targetIdx], oldEstado, res.estado, res.operador, targetIdx);
         } else {
@@ -2696,11 +2716,12 @@ async function confirmarRegistro() {
 async function tomarPantallazo(imei) {
     const idx = registros.findIndex(r => r.imei === imei);
     const reg = idx > -1 ? registros[idx] : (registros.find(r => r.imei === imei) || {});
+    const isDetallesOpen = document.getElementById('detallesOverlay')?.classList.contains('active');
 
     if (idx > -1) {
         registros[idx]._tomandoCaptura = true;
         renderizarTabla();
-        if (indiceDetallesActual === idx) {
+        if (indiceDetallesActual === idx && isDetallesOpen) {
             abrirDetalles(indiceDetallesActual);
         }
     }
@@ -2725,7 +2746,7 @@ async function tomarPantallazo(imei) {
         if (idx > -1 && registros[idx]) {
             delete registros[idx]._tomandoCaptura;
             renderizarTabla();
-            if (indiceDetallesActual === idx) {
+            if (indiceDetallesActual === idx && document.getElementById('detallesOverlay')?.classList.contains('active')) {
                 abrirDetalles(indiceDetallesActual);
             }
         }
@@ -3863,7 +3884,7 @@ async function ejecutarRegistro() {
         return;
     }
 
-    showToastLoading("Registrando solicitud...");
+    showToastLoading("Creando cuenta...");
     try {
         // Llama a Python pasando el nombre
         const res = await window.pywebview.api.registrar_usuario(user, pass, nombre);
@@ -5933,19 +5954,20 @@ function formatNotificationText(notif) {
         const desc = (getNotifField(notif, 'descripcion') || '').toString().trim();
 
         let baseMsg = "";
-        if (razon.toLowerCase() === 'solicitud') {
-            baseMsg = `Solicitud externa: ${model} ${imeiShort}`;
-        } else if (razon.toLowerCase() === 'solicitud_registro') {
+        const razonLow = razon.toLowerCase();
+        if (razonLow === 'solicitud_registro') {
             baseMsg = `Solicitud de registro: ${model}`;
-        } else if (razon.toLowerCase() === 'bloqueo') {
+        } else if (razonLow === 'solicitud' || razonLow.includes('solicitud')) {
+            baseMsg = `Nueva solicitud: ${model}${imei ? ' [' + imei + ']' : ''}`;
+        } else if (razonLow === 'bloqueo') {
             baseMsg = `${model} ${imeiShort} ha sido bloqueado`;
-        } else if (razon.toLowerCase() === 'desbloqueo') {
+        } else if (razonLow === 'desbloqueo') {
             baseMsg = `${model} ${imeiShort} ha sido desbloqueado`;
         } else {
             baseMsg = `${model} ${imeiShort} - ${razon || 'Notificación'}`;
         }
 
-        if (desc) {
+        if (desc && desc !== imei && desc !== model) {
             return `${baseMsg} (${desc})`;
         }
         return baseMsg;
@@ -6021,6 +6043,8 @@ function actualizarBadgeNotificaciones() {
     }
 }
 
+const _ultimasNotifsRecibidas = new Map();
+
 window.recibirNotificacionRealtime = function (notif) {
     console.log("📡 [JS Realtime] Notificación recibida:", notif);
     if (!notif) return;
@@ -6030,13 +6054,34 @@ window.recibirNotificacionRealtime = function (notif) {
     }
 
     const notifId = getNotifField(notif, 'id');
-    if (!notifId) return;
-    if (listNotificaciones.some(n => getNotifField(n, 'id') === notifId)) return;
+    const imei = String(getNotifField(notif, 'IMEI') || getNotifField(notif, 'imei') || '').trim();
+    const razon = (getNotifField(notif, 'Razon') || getNotifField(notif, 'razon') || getNotifField(notif, 'tipo') || '').toString().trim().toLowerCase();
+
+    // 1. Deduplicación por ID
+    if (notifId && (listNotificaciones.some(n => getNotifField(n, 'id') === notifId) || seenNotificationIds.has(notifId))) {
+        return;
+    }
+
+    // 2. Deduplicación por IMEI + Razón (ventana de 6 segundos)
+    const claveDeduplicacion = `${imei}_${razon}`;
+    const ahora = Date.now();
+    if (imei && _ultimasNotifsRecibidas.has(claveDeduplicacion)) {
+        const tiempoPrevio = _ultimasNotifsRecibidas.get(claveDeduplicacion);
+        if (ahora - tiempoPrevio < 6000) {
+            console.log(`[JS Realtime] Notificación duplicada ignorada para IMEI ${imei} (${razon})`);
+            return;
+        }
+    }
+    if (imei) {
+        _ultimasNotifsRecibidas.set(claveDeduplicacion, ahora);
+    }
+
+    if (notifId) {
+        seenNotificationIds.add(notifId);
+    }
 
     listNotificaciones.unshift(notif);
-    seenNotificationIds.add(notifId);
 
-    const razon = (getNotifField(notif, 'razon') || '').toString().trim().toLowerCase();
     showToast(
         formatNotificationText(notif),
         razon === 'solicitud' ? 'bell' : (razon === 'desbloqueo' ? 'unlocked' : 'locked')
@@ -6113,12 +6158,12 @@ function toggleNotificacionesModal(event) {
     if (event) event.stopPropagation();
     const modal = document.getElementById('notificacionesModal');
     if (!modal) return;
-    const isHidden = modal.classList.contains('hidden');
-    if (isHidden) {
-        modal.classList.remove('hidden');
+    const isVisible = modal.style.display === 'flex';
+    if (!isVisible) {
+        modal.style.display = 'flex';
         cargarNotificaciones();
     } else {
-        modal.classList.add('hidden');
+        modal.style.display = 'none';
     }
 }
 window.toggleNotificacionesModal = toggleNotificacionesModal;
@@ -6131,14 +6176,26 @@ function renderizarNotificacionesList() {
         return;
     }
 
+    // Actualizar contador en la cabecera
+    const contadorLabel = document.getElementById('notifContadorLabel');
+    if (contadorLabel) {
+        const total = Array.isArray(listNotificaciones) ? listNotificaciones.length : 0;
+        if (total > 0) {
+            contadorLabel.textContent = `${total} nueva${total !== 1 ? 's' : ''}`;
+            contadorLabel.classList.remove('hidden');
+        } else {
+            contadorLabel.classList.add('hidden');
+        }
+    }
+
     if (!Array.isArray(listNotificaciones) || listNotificaciones.length === 0) {
         console.log("📡 [JS] Lista de notificaciones vacía.");
         container.innerHTML = `
-            <div class="flex flex-col items-center justify-center py-12 opacity-40">
-                <svg class="w-8 h-8 mb-2 text-cyan-400 opacity-50" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            <div class="notif-empty-state">
+                <svg class="w-7 h-7 mb-2 opacity-30" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
                 </svg>
-                <span class="text-[9px] uppercase tracking-widest font-black text-cyan-200">Sin notificaciones</span>
+                Sin notificaciones
             </div>
         `;
         return;
@@ -6146,6 +6203,7 @@ function renderizarNotificacionesList() {
 
     console.log(`📡 [JS] Renderizando ${listNotificaciones.length} notificaciones...`);
     container.innerHTML = "";
+
     listNotificaciones.forEach(notif => {
         try {
             const notifId = getNotifField(notif, 'id');
@@ -6158,6 +6216,9 @@ function renderizarNotificacionesList() {
             if (razon === 'solicitud_registro') {
                 typeClass = "notif-type-registro";
                 iconHtml = '<svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>';
+            } else if (razon === 'solicitud' || razon.includes('solicitud')) {
+                typeClass = "notif-type-solicitud";
+                iconHtml = '<svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>';
             } else if (razon === 'desbloqueo') {
                 typeClass = "notif-type-desbloqueo";
                 iconHtml = '<svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>';
@@ -6215,7 +6276,7 @@ function renderizarNotificacionesList() {
                     if (idx > -1) {
                         abrirDetalles(idx);
                         const modal = document.getElementById('notificacionesModal');
-                        if (modal) modal.classList.add('hidden');
+                        if (modal) modal.style.display = 'none';
                     } else {
                         showToast("Trabajo no encontrado en registros activos", "warning");
                     }
@@ -6363,13 +6424,13 @@ function inicializarNotificaciones() {
             cargarNotificaciones();
         });
     }
-    setInterval(cargarNotificaciones, 8000);
+    // Polling recurrente eliminado: las notificaciones se consultan al iniciar y bajo demanda al abrir el centro de notificaciones
 
     document.addEventListener('click', (e) => {
         const modal = document.getElementById('notificacionesModal');
         const btn = document.getElementById('btnNotificaciones');
-        if (modal && !modal.classList.contains('hidden') && !modal.contains(e.target) && (!btn || !btn.contains(e.target))) {
-            modal.classList.add('hidden');
+        if (modal && modal.style.display === 'flex' && !modal.contains(e.target) && (!btn || !btn.contains(e.target))) {
+            modal.style.display = 'none';
         }
     });
 }

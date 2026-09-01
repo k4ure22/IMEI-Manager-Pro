@@ -60,6 +60,9 @@ if %errorlevel% equ 0 (
     set "ISCC_PATH=%LocalAppData%\Programs\Inno Setup 6\iscc.exe"
 )
 
+echo 🗜️ Generando paquete portable ZIP comprimido para compartir...
+powershell -Command "if (Test-Path 'dist\IMEI_Manager_Pro_v2.0_Windows_Portable.zip') { Remove-Item 'dist\IMEI_Manager_Pro_v2.0_Windows_Portable.zip' }; Compress-Archive -Path 'dist\IMEI Manager Pro\*' -DestinationPath 'dist\IMEI_Manager_Pro_v2.0_Windows_Portable.zip' -Force"
+
 if defined ISCC_PATH (
     echo 🔨 Compilando Instalador Setup con Inno Setup...
     "%ISCC_PATH%" installer_windows.iss
@@ -68,25 +71,28 @@ if defined ISCC_PATH (
         echo ============================================================
         echo 🎉 ¡TODO LISTO CON ÉXITO!
         echo.
-        echo 1️⃣  EJECUTABLE PORTABLE:
-        echo     dist\IMEI Manager Pro\IMEI Manager Pro.exe
-        echo.
-        echo 2️⃣  INSTALADOR SETUP (Para distribuir a clientes):
+        echo 1️⃣  INSTALADOR SETUP (Para instalar en Windows):
         echo     dist_installer\Instalador_IMEI_Manager_Pro_v2.0_Setup.exe
+        echo.
+        echo 2️⃣  PAQUETE COMPRIMIDO ZIP PORTABLE (Listo para compartir):
+        echo     dist\IMEI_Manager_Pro_v2.0_Windows_Portable.zip
+        echo.
+        echo 3️⃣  CARPETA DE EJECUTABLE:
+        echo     dist\IMEI Manager Pro\IMEI Manager Pro.exe
         echo ============================================================
     ) else (
         echo.
-        echo ⚠️ Advertencia: Falló Inno Setup. El ejecutable portable dist\IMEI Manager Pro\ está listo.
+        echo ⚠️ Advertencia: Falló Inno Setup. El ZIP portable y la carpeta ejecutable están listos.
     )
 ) else (
     echo.
     echo ℹ️ Inno Setup no está instalado en este equipo.
-    echo    El ejecutable portable ya está listo en:
-    echo    👉 dist\IMEI Manager Pro\IMEI Manager Pro.exe
+    echo    El paquete portable comprimido ya está listo para compartir en:
+    echo    👉 dist\IMEI_Manager_Pro_v2.0_Windows_Portable.zip
     echo.
     echo    Si deseas compilar el Instalador Setup (.exe):
-    echo    1. Instala Inno Setup (winget install JRSoftware.InnoSetup o desde https://jrsoftware.org/isdl.php)
-    echo    2. Vuelve a ejecutar este build_windows.bat o abre installer_windows.iss en Inno Setup.
+    echo    1. Instala Inno Setup (winget install JRSoftware.InnoSetup)
+    echo    2. Vuelve a ejecutar este build_windows.bat.
     echo ============================================================
 )
 

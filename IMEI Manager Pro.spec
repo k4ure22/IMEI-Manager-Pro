@@ -1,21 +1,17 @@
-# -*- mode: python ; coding: utf-8 -*-
-
 import os
 import sys
+import shutil
 
-# Archivos y carpetas adicionales que deben ser empaquetados
+# Asegurar que shutil.copyfile cree automáticamente los directorios padre necesarios
+_orig_copyfile = shutil.copyfile
+def _safe_copyfile(src, dst, *args, **kwargs):
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    return _orig_copyfile(src, dst, *args, **kwargs)
+shutil.copyfile = _safe_copyfile
+
+# Archivos y carpetas adicionales que deben ser empaquetados (sin archivos .py sueltos para proteger el código fuente)
 mis_datas = [
     ('Views', 'Views'),
-    ('Controllers/GeneradorPDF.py', '.'),
-    ('Controllers/ConsultarModelo.py', '.'),
-    ('Controllers/ConsultarModeloPro.py', '.'),
-    ('Controllers/blacklist.py', '.'),
-    ('Controllers/RegistrarWom.py', '.'),
-    ('Controllers/RegistrarEtb.py', '.'),
-    ('Controllers/consultar_imei.py', '.'),
-    ('Controllers/TomarPantallazo.py', '.'),
-    ('Controllers/EnviarCorreoWom.py', '.'),
-    ('Controllers/EstilizadorPantallazo.py', '.'),
     ('Controllers/BiometricAuth.swift', '.'),
     ('logoIMPlight.png', '.'),
     ('logoIMPdark.png', '.'),
@@ -39,6 +35,27 @@ scripts_to_analyze = [
 hidden_imports = [
     'webview',
     'webview.platforms.cocoa',
+    'Controllers',
+    'Controllers.GeneradorPDF',
+    'Controllers.ConsultarModelo',
+    'Controllers.ConsultarModeloPro',
+    'Controllers.blacklist',
+    'Controllers.RegistrarWom',
+    'Controllers.RegistrarEtb',
+    'Controllers.consultar_imei',
+    'Controllers.TomarPantallazo',
+    'Controllers.EnviarCorreoWom',
+    'Controllers.EstilizadorPantallazo',
+    'GeneradorPDF',
+    'ConsultarModelo',
+    'ConsultarModeloPro',
+    'blacklist',
+    'RegistrarWom',
+    'RegistrarEtb',
+    'consultar_imei',
+    'TomarPantallazo',
+    'EnviarCorreoWom',
+    'EstilizadorPantallazo',
     'reportlab',
     'reportlab.pdfgen.canvas',
     'reportlab.lib.pagesizes',
@@ -74,14 +91,27 @@ if os.path.exists(chromedriver_bin):
 
 a = Analysis(
     scripts_to_analyze,
-    pathex=[],
+    pathex=['Controllers', '.'],
     binaries=mis_binaries,
     datas=mis_datas,
     hiddenimports=hidden_imports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        'pandas',
+        'matplotlib',
+        'scipy',
+        'torch',
+        'IPython',
+        'pytest',
+        'unittest',
+        'tkinter',
+        'PyQt5',
+        'PySide2',
+        'PySide6',
+        'wx'
+    ],
     noarchive=False,
     optimize=0,
 )

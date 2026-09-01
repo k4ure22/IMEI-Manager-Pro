@@ -75,14 +75,14 @@ ln -s /Applications "$DMG_STAGING/Applications"
 DMG_OUTPUT="dist/IMEI_Manager_Pro_v2.0_Installer.dmg"
 rm -f "$DMG_OUTPUT"
 
-echo "🔨 [3/3] Empaquetando DMG con hdiutil..."
+echo "🔨 [3/4] Empaquetando DMG con hdiutil..."
 hdiutil create -volname "IMEI Manager Pro" \
     -srcfolder "$DMG_STAGING" \
     -ov -format UDZO \
     "$DMG_OUTPUT"
 DMG_EXIT=$?
 
-# Limpieza
+# Limpieza staging DMG
 rm -rf "$DMG_STAGING"
 
 if [ $DMG_EXIT -ne 0 ]; then
@@ -90,10 +90,17 @@ if [ $DMG_EXIT -ne 0 ]; then
     exit 1
 fi
 
+# 5. Generar archivo ZIP comprimido de la aplicación macOS
+ZIP_OUTPUT="dist/IMEI_Manager_Pro_v2.0_macOS.zip"
+rm -f "$ZIP_OUTPUT"
+echo ""
+echo "📦 [4/4] Generando archivo comprimido ZIP para compartir..."
+(cd dist && zip -r -q -y "IMEI_Manager_Pro_v2.0_macOS.zip" "IMEI Manager Pro.app")
+
 echo ""
 echo "============================================================"
 echo "🎉 ¡PROCESO COMPLETADO CON ÉXITO!"
-echo "📱 Aplicación:  $APP_PATH"
-echo "💿 Instalador:  $DMG_OUTPUT"
-echo "   Tamaño DMG:  $(du -sh "$DMG_OUTPUT" | cut -f1)"
+echo "📱 Aplicación:     $APP_PATH"
+echo "💿 Instalador DMG: $DMG_OUTPUT ($(du -sh "$DMG_OUTPUT" | cut -f1))"
+echo "🗜️  Archivo ZIP:    $ZIP_OUTPUT ($(du -sh "$ZIP_OUTPUT" | cut -f1))"
 echo "============================================================"

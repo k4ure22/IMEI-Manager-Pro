@@ -768,23 +768,187 @@ tbody tr:hover .neon-indicator {
     visibility: visible !important;
 }
 
-/* Config overlay: Desplegable desde la Zona Superior Derecha (como notificaciones) */
+/* ==========================================
+   CONFIG OVERLAY & MODAL (APPLE / MACOS STYLE)
+   ========================================== */
 #configOverlay {
-    background: rgba(4, 2, 10, 0.40);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    transition: opacity 0.3s ease, visibility 0.3s ease;
+    background: rgba(4, 2, 10, 0.55);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.25s ease;
+    isolation: isolate;
 }
 
 #configOverlay .config-popover-panel {
-    transform: translateY(-15px) scale(0.95);
+    background: rgba(13, 17, 30, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.70), 0 4px 20px rgba(0, 0, 0, 0.40);
+    transform: translateY(-12px) scale(0.96) translateZ(0);
     opacity: 0;
-    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease;
+    isolation: isolate;
+    contain: paint;
+    backface-visibility: hidden;
 }
 
 #configOverlay.active .config-popover-panel {
-    transform: translateY(0) scale(1);
+    transform: translateY(0) scale(1) translateZ(0);
     opacity: 1;
+}
+
+.config-header-card {
+    background: linear-gradient(145deg, rgba(22, 28, 50, 0.95) 0%, rgba(11, 15, 28, 0.98) 100%);
+}
+
+.config-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.config-section-title {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: rgba(255, 255, 255, 0.45);
+    margin-left: 6px;
+}
+
+.config-group-card {
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 1.25rem;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.config-group-card:hover {
+    border-color: rgba(255, 255, 255, 0.11);
+}
+
+.config-item-row,
+.config-item-button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 10px 14px;
+    background: transparent;
+    border: none;
+    cursor: default;
+    transition: background-color 0.15s ease;
+    text-align: left;
+}
+
+button.config-item-button {
+    cursor: pointer;
+}
+
+button.config-item-button:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+button.config-item-button:active {
+    background: rgba(255, 255, 255, 0.09);
+}
+
+.config-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.05);
+    margin: 0 12px;
+}
+
+.config-icon-box {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.config-item-button:hover .config-icon-box {
+    transform: scale(1.05);
+}
+
+.config-select-pill {
+    background: rgba(0, 0, 0, 0.45);
+    color: #f1f5f9;
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    outline: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.config-select-pill:hover,
+.config-select-pill:focus {
+    border-color: rgba(34, 211, 238, 0.6);
+    box-shadow: 0 0 10px rgba(34, 211, 238, 0.2);
+}
+
+.config-select-pill option {
+    background: #0f172a;
+    color: #f8fafc;
+}
+
+.config-action-badge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.55);
+    background: rgba(255, 255, 255, 0.05);
+    padding: 4px 8px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    transition: all 0.2s ease;
+}
+
+.config-item-button:hover .config-action-badge {
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.config-logout-btn {
+    width: 100%;
+    padding: 10px 16px;
+    border-radius: 1rem;
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.20);
+    color: #f87171;
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 2px 10px rgba(239, 68, 68, 0.05);
+}
+
+.config-logout-btn:hover {
+    background: rgba(239, 68, 68, 0.9);
+    color: #ffffff;
+    border-color: rgba(239, 68, 68, 1);
+    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.35);
+    transform: translateY(-1px);
+}
+
+.config-logout-btn:active {
+    transform: translateY(0);
 }
 
 /* Panel Lateral Historial */
@@ -3749,137 +3913,260 @@ html[data-theme="light"] #dbStatusIcon {
 }
 
 /* ==========================================================================
-   CENTRO DE NOTIFICACIONES (NOTIFICATIONS)
+   CENTRO DE NOTIFICACIONES (NOTIFICATIONS) — diseño premium
    ========================================================================== */
 
-/* Animación de apertura */
+/* Modal principal */
 .notif-modal {
     transform-origin: bottom left;
-    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
-    background: rgba(15, 8, 28, 0.85) !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7) !important;
-    animation: notifPopOpen 0.35s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+    background: rgba(10, 5, 22, 0.92) !important;
+    border: 1px solid rgba(130, 100, 255, 0.18) !important;
+    box-shadow:
+        0 25px 60px rgba(0, 0, 0, 0.85),
+        0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+        0 1px 0 rgba(255, 255, 255, 0.06) inset !important;
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    animation: notifPopOpen 0.3s cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
+    flex-direction: column;
+    max-height: calc(100vh - 100px);
+    overflow: hidden;
 }
 
 @keyframes notifPopOpen {
     from {
-        transform: scale(0.85) translateY(20px);
+        transform: scale(0.88) translateY(16px);
         opacity: 0;
     }
-
     to {
         transform: scale(1) translateY(0);
         opacity: 1;
     }
 }
 
-/* Contenedor principal de la tarjeta de notificación (swipe) */
+/* ── Cabecera premium ── */
+.notif-header-premium {
+    padding: 14px 16px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(135deg, rgba(100, 60, 220, 0.12) 0%, rgba(0, 200, 255, 0.06) 100%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    position: relative;
+    overflow: hidden;
+}
+
+.notif-header-premium::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 16px;
+    right: 16px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(100, 180, 255, 0.3), transparent);
+}
+
+.notif-header-icon {
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(100, 60, 220, 0.3), rgba(0, 200, 255, 0.15));
+    border: 1px solid rgba(130, 100, 255, 0.3);
+    color: #a5b4fc;
+    box-shadow: 0 0 10px rgba(100, 60, 220, 0.2);
+    flex-shrink: 0;
+}
+
+.notif-header-title {
+    display: block;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: rgba(220, 210, 255, 0.9);
+    line-height: 1.2;
+}
+
+.notif-header-count {
+    font-size: 9px;
+    font-weight: 700;
+    color: rgba(130, 100, 255, 0.8);
+    letter-spacing: 0.05em;
+}
+
+.notif-close-btn {
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.45);
+    cursor: pointer;
+    transition: all 0.18s ease;
+    outline: none;
+    flex-shrink: 0;
+}
+
+.notif-close-btn:hover {
+    background: rgba(255, 100, 100, 0.12);
+    border-color: rgba(255, 100, 100, 0.25);
+    color: #f87171;
+}
+
+/* ── Lista de notificaciones ── */
+.notif-list-container {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 10px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 80px;
+    max-height: calc(100vh - 180px);
+}
+
+.notif-list-container::-webkit-scrollbar { width: 3px; }
+.notif-list-container::-webkit-scrollbar-track { background: transparent; }
+.notif-list-container::-webkit-scrollbar-thumb { background: rgba(130,100,255,0.25); border-radius: 10px; }
+.notif-list-container::-webkit-scrollbar-thumb:hover { background: rgba(130,100,255,0.45); }
+
+/* Estado vacío */
+.notif-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 28px 0;
+    color: rgba(180, 170, 220, 0.35);
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    gap: 4px;
+}
+
+/* ── Tarjeta de notificación (swipe container) ── */
 .notif-item-wrapper {
     position: relative;
     overflow: hidden;
-    border-radius: 0.8rem;
+    border-radius: 11px;
     background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.05);
     height: auto;
-    transition: height 0.3s cubic-bezier(0.25, 1, 0.5, 1),
-        margin 0.3s cubic-bezier(0.25, 1, 0.5, 1),
-        opacity 0.25s ease;
+    transition:
+        height 0.28s cubic-bezier(0.25, 1, 0.5, 1),
+        margin 0.28s cubic-bezier(0.25, 1, 0.5, 1),
+        opacity 0.22s ease;
 }
 
-/* Fondo rojo que se revela al deslizar */
+/* Fondo rojo al deslizar */
 .notif-delete-bg {
     position: absolute;
     inset: 0;
-    background: linear-gradient(90deg, rgba(239, 68, 68, 0.05) 0%, rgba(239, 68, 68, 0.2) 100%);
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    border-radius: 0.8rem;
+    background: linear-gradient(90deg, rgba(239, 68, 68, 0.04) 0%, rgba(239, 68, 68, 0.18) 100%);
+    border-radius: 11px;
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    padding-right: 18px;
+    padding-right: 16px;
     color: #f87171;
     font-weight: 800;
-    font-size: 9px;
+    font-size: 8px;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.12em;
     z-index: 1;
     pointer-events: none;
     text-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
 }
 
-/* Tarjeta del contenido de la notificación */
+/* Contenido de la tarjeta */
 .notif-item-content {
     position: relative;
     z-index: 2;
-    background: #0d0718;
-    padding: 11px 14px;
+    background: rgba(14, 8, 30, 0.98);
+    padding: 10px 13px;
     display: flex;
-    gap: 12px;
+    gap: 11px;
     align-items: center;
-    transition: transform 0.15s ease-out, background-color 0.2s;
+    transition: transform 0.15s ease-out, background-color 0.18s;
     cursor: pointer;
     touch-action: pan-y;
     user-select: none;
+    border-radius: 10px;
 }
 
 .notif-item-content:hover {
-    background-color: #1a102b;
-    /* Color sólido opaco para evitar que el texto subyacente se traslape */
+    background: rgba(30, 18, 55, 0.98);
 }
 
-/* Iconos de notificaciones */
+/* Icono circular */
 .notif-icon-circle {
-    width: 28px;
-    height: 28px;
+    width: 30px;
+    height: 30px;
     display: flex;
     justify-content: center;
     align-items: center;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.05);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.04);
     flex-shrink: 0;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.07);
     transition: all 0.2s ease;
 }
 
-/* Estilos de bordes y colores específicos por tipo de notificación */
+/* Tipos de notificación — borde izquierdo de color + glow sutil */
+.notif-item-wrapper.notif-type-solicitud {
+    border-left: 2.5px solid #f59e0b !important;
+    box-shadow: -2px 0 12px rgba(245, 158, 11, 0.15);
+}
 .notif-item-wrapper.notif-type-desbloqueo {
-    border-left: 3px solid #10b981 !important;
+    border-left: 2.5px solid #10b981 !important;
+    box-shadow: -2px 0 12px rgba(16, 185, 129, 0.15);
 }
-
 .notif-item-wrapper.notif-type-bloqueo {
-    border-left: 3px solid #ef4444 !important;
+    border-left: 2.5px solid #ef4444 !important;
+    box-shadow: -2px 0 12px rgba(239, 68, 68, 0.15);
 }
-
 .notif-item-wrapper.notif-type-registro {
-    border-left: 3px solid #a855f7 !important;
+    border-left: 2.5px solid #a855f7 !important;
+    box-shadow: -2px 0 12px rgba(168, 85, 247, 0.15);
 }
-
 .notif-item-wrapper.notif-type-default {
-    border-left: 3px solid #06b6d4 !important;
+    border-left: 2.5px solid #06b6d4 !important;
+    box-shadow: -2px 0 12px rgba(6, 182, 212, 0.12);
 }
 
+/* Iconos por tipo */
+.notif-item-wrapper.notif-type-solicitud .notif-icon-circle {
+    background: rgba(245, 158, 11, 0.12) !important;
+    border-color: rgba(245, 158, 11, 0.25) !important;
+    color: #f59e0b !important;
+}
 .notif-item-wrapper.notif-type-desbloqueo .notif-icon-circle {
     background: rgba(16, 185, 129, 0.1) !important;
-    border-color: rgba(16, 185, 129, 0.2) !important;
+    border-color: rgba(16, 185, 129, 0.22) !important;
     color: #10b981 !important;
 }
-
 .notif-item-wrapper.notif-type-bloqueo .notif-icon-circle {
     background: rgba(239, 68, 68, 0.1) !important;
-    border-color: rgba(239, 68, 68, 0.2) !important;
+    border-color: rgba(239, 68, 68, 0.22) !important;
     color: #ef4444 !important;
 }
-
 .notif-item-wrapper.notif-type-registro .notif-icon-circle {
-    background: rgba(37, 99, 235, 0.10) !important;
-    border-color: rgba(37, 99, 235, 0.20) !important;
-    color: #2563eb !important;
+    background: rgba(168, 85, 247, 0.1) !important;
+    border-color: rgba(168, 85, 247, 0.22) !important;
+    color: #a855f7 !important;
 }
-
 .notif-item-wrapper.notif-type-default .notif-icon-circle {
     background: rgba(6, 182, 212, 0.1) !important;
-    border-color: rgba(6, 182, 212, 0.2) !important;
+    border-color: rgba(6, 182, 212, 0.22) !important;
     color: #06b6d4 !important;
 }
 
@@ -3894,25 +4181,41 @@ html[data-theme="light"] #dbStatusIcon {
     opacity: 0;
 }
 
-/* Personalización del scrollbar en el popover */
-#notificacionesList::-webkit-scrollbar {
-    width: 4px;
+/* ── Footer ── */
+.notif-footer {
+    padding: 10px 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(5, 2, 14, 0.6);
+    display: flex;
+    justify-content: center;
 }
 
-#notificacionesList::-webkit-scrollbar-track {
-    background: transparent;
+.notif-btn-borrar {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 14px;
+    background: rgba(239, 68, 68, 0.06);
+    border: 1px solid rgba(239, 68, 68, 0.14);
+    color: rgba(248, 113, 113, 0.65);
+    font-weight: 700;
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
 }
 
-#notificacionesList::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
+.notif-btn-borrar:hover {
+    background: rgba(239, 68, 68, 0.14);
+    border-color: rgba(239, 68, 68, 0.28);
+    color: #f87171;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.15);
 }
 
-#notificacionesList::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.25);
-}
-
-/* Clases de utilidad para el badge de punto de notificación en el dock */
+/* ── Badge del botón flotante ── */
 .badge-pulse {
     animation: badgeScalePulse 2s infinite alternate;
 }
@@ -3922,10 +4225,9 @@ html[data-theme="light"] #dbStatusIcon {
         transform: scale(0.9);
         box-shadow: 0 0 4px #ef4444;
     }
-
     100% {
-        transform: scale(1.1);
-        box-shadow: 0 0 10px #ef4444;
+        transform: scale(1.15);
+        box-shadow: 0 0 10px #ef4444, 0 0 20px rgba(239, 68, 68, 0.4);
     }
 }
 
@@ -4233,8 +4535,37 @@ screen and (min-resolution: 120dpi) {
     box-shadow: 0 20px 50px rgba(37, 99, 235, 0.16) !important;
 }
 
+[data-theme="light"] .notif-header-premium {
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(0, 180, 220, 0.05) 100%) !important;
+    border-bottom-color: rgba(37, 99, 235, 0.12) !important;
+}
+
+[data-theme="light"] .notif-header-title {
+    color: #1e3a8a !important;
+}
+
+[data-theme="light"] .notif-header-count {
+    color: rgba(37, 99, 235, 0.75) !important;
+}
+
+[data-theme="light"] .notif-close-btn {
+    background: rgba(37, 99, 235, 0.05) !important;
+    border-color: rgba(37, 99, 235, 0.12) !important;
+    color: rgba(30, 58, 138, 0.55) !important;
+}
+
+[data-theme="light"] .notif-close-btn:hover {
+    background: rgba(220, 38, 38, 0.08) !important;
+    border-color: rgba(220, 38, 38, 0.2) !important;
+    color: #dc2626 !important;
+}
+
+[data-theme="light"] .notif-list-container::-webkit-scrollbar-thumb {
+    background: rgba(37, 99, 235, 0.18);
+}
+
 [data-theme="light"] .notif-item-content {
-    background: rgba(255, 255, 255, 0.92) !important;
+    background: rgba(255, 255, 255, 0.95) !important;
     color: #0f172a !important;
 }
 
@@ -4247,20 +4578,25 @@ screen and (min-resolution: 120dpi) {
     border-color: rgba(37, 99, 235, 0.10) !important;
 }
 
-[data-theme="light"] #notificacionesList::-webkit-scrollbar-thumb {
-    background: rgba(37, 99, 235, 0.18);
+[data-theme="light"] .notif-empty-state {
+    color: rgba(37, 99, 235, 0.4) !important;
 }
 
-/* Cabecera de notificaciones (bg-white/5, border-white/10) */
-[data-theme="light"] .notif-modal>div:first-child {
-    background: rgba(219, 234, 254, 0.70) !important;
-    border-bottom-color: rgba(37, 99, 235, 0.14) !important;
-}
-
-/* Footer borrar todo de notificaciones */
-[data-theme="light"] .notif-modal>div:last-child {
+[data-theme="light"] .notif-footer {
     background: rgba(239, 246, 255, 0.85) !important;
-    border-top-color: rgba(37, 99, 235, 0.14) !important;
+    border-top-color: rgba(37, 99, 235, 0.12) !important;
+}
+
+[data-theme="light"] .notif-btn-borrar {
+    background: rgba(220, 38, 38, 0.05) !important;
+    border-color: rgba(220, 38, 38, 0.14) !important;
+    color: rgba(185, 28, 28, 0.6) !important;
+}
+
+[data-theme="light"] .notif-btn-borrar:hover {
+    background: rgba(220, 38, 38, 0.1) !important;
+    border-color: rgba(220, 38, 38, 0.25) !important;
+    color: #dc2626 !important;
 }
 
 /* ── Bordes border-white/* → azul claro ── */
@@ -4302,51 +4638,90 @@ screen and (min-resolution: 120dpi) {
     background-color: rgba(219, 234, 254, 0.60) !important;
 }
 
-/* ── Config overlay: fondo slate sólido en lugar de oscuro ── */
+/* ── Config overlay: Modo Claro Moderno ── */
 [data-theme="light"] #configOverlay {
-    background: rgba(15, 23, 42, 0.50) !important;
+    background: rgba(15, 23, 42, 0.35) !important;
 }
 
-/* Config panel (liquid-glass interno) − header con gradiente */
-[data-theme="light"] #configOverlay .liquid-glass {
-    background: linear-gradient(160deg, rgba(255, 255, 255, 0.97), rgba(239, 246, 255, 0.95)) !important;
-    border-color: rgba(37, 99, 235, 0.20) !important;
+[data-theme="light"] #configOverlay .config-popover-panel {
+    background: rgba(255, 255, 255, 0.95) !important;
+    border-color: rgba(0, 0, 0, 0.08) !important;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.15), 0 4px 16px rgba(0, 0, 0, 0.05) !important;
 }
 
-/* Config header bg-black/10, border-white/5 */
-[data-theme="light"] #configOverlay .bg-black\/10 {
-    background: rgba(219, 234, 254, 0.45) !important;
+[data-theme="light"] .config-header-card {
+    background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%) !important;
+    border-bottom-color: rgba(0, 0, 0, 0.06) !important;
 }
 
-[data-theme="light"] #configOverlay .border-white\/5 {
-    border-color: rgba(37, 99, 235, 0.12) !important;
-}
-
-/* Botones de opción en config (bg-white/5, hover:bg-white/10) */
-[data-theme="light"] #configOverlay button.bg-white\/5,
-[data-theme="light"] #configOverlay .bg-white\/5 {
-    background-color: rgba(239, 246, 255, 0.82) !important;
-    border-color: rgba(37, 99, 235, 0.14) !important;
+[data-theme="light"] .config-header-card #profileUserName {
     color: #0f172a !important;
 }
 
-[data-theme="light"] #configOverlay button:hover.hover\:bg-white\/10,
-[data-theme="light"] #configOverlay .hover\:bg-white\/10:hover {
-    background-color: rgba(219, 234, 254, 0.88) !important;
+[data-theme="light"] .config-header-card #profileUserEmail {
+    color: #64748b !important;
 }
 
-/* Select en config */
-[data-theme="light"] #configOverlay select,
-[data-theme="light"] #ordenarRegistros {
-    background: rgba(255, 255, 255, 0.90) !important;
+[data-theme="light"] .config-section-title {
+    color: #64748b !important;
+}
+
+[data-theme="light"] .config-group-card {
+    background: #ffffff !important;
+    border-color: rgba(0, 0, 0, 0.07) !important;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03) !important;
+}
+
+[data-theme="light"] .config-divider {
+    background: rgba(0, 0, 0, 0.05) !important;
+}
+
+[data-theme="light"] .config-item-row span.text-white,
+[data-theme="light"] .config-item-button span.text-white {
     color: #0f172a !important;
-    border-color: rgba(37, 99, 235, 0.22) !important;
 }
 
-[data-theme="light"] #configOverlay select option,
-[data-theme="light"] #ordenarRegistros option {
-    background: #f8fafc;
-    color: #0f172a;
+[data-theme="light"] .config-item-row span.text-gray-400,
+[data-theme="light"] .config-item-button span.text-gray-400 {
+    color: #64748b !important;
+}
+
+[data-theme="light"] button.config-item-button:hover {
+    background: rgba(0, 0, 0, 0.03) !important;
+}
+
+[data-theme="light"] .config-select-pill {
+    background: #f8fafc !important;
+    color: #0f172a !important;
+    border-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+[data-theme="light"] .config-select-pill:hover,
+[data-theme="light"] .config-select-pill:focus {
+    border-color: rgba(37, 99, 235, 0.5) !important;
+    box-shadow: 0 0 8px rgba(37, 99, 235, 0.15) !important;
+}
+
+[data-theme="light"] .config-select-pill option {
+    background: #ffffff !important;
+    color: #0f172a !important;
+}
+
+[data-theme="light"] .config-action-badge {
+    color: #475569 !important;
+    background: #f1f5f9 !important;
+    border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-theme="light"] .config-logout-btn {
+    background: rgba(239, 68, 68, 0.08) !important;
+    color: #dc2626 !important;
+    border-color: rgba(239, 68, 68, 0.20) !important;
+}
+
+[data-theme="light"] .config-logout-btn:hover {
+    background: #dc2626 !important;
+    color: #ffffff !important;
 }
 
 /* ── Labels blancos → oscuro legible ── */

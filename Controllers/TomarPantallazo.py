@@ -142,16 +142,18 @@ class IMEIScraper:
                 
                 try:
                     xpath_info = '/html/body/table/tbody/tr[2]/td/table/tbody/tr[2]/td[2]/table/tbody/tr[3]/td/table/tbody/tr[2]/td[1]'
-                    WebDriverWait(self.driver, 3).until(EC.presence_of_element_located((By.XPATH, xpath_info)))
-                    
-                    tabla_resultados = self.driver.find_element(By.XPATH, '/html/body/table/tbody/tr[2]/td/table/tbody/tr[2]/td[2]/table/tbody/tr[3]')
-                    self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", tabla_resultados)
-                    time.sleep(0.5) 
+                    WebDriverWait(self.driver, 4).until(EC.presence_of_element_located((By.XPATH, xpath_info)))
                     
                     try:
-                        tabla_resultados.screenshot(ruta_guardado)
+                        tabla_box = self.driver.find_element(By.XPATH, '/html/body/table/tbody/tr[2]/td/table/tbody/tr[2]/td[2]/table')
+                        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", tabla_box)
+                        time.sleep(0.3)
+                        tabla_box.screenshot(ruta_guardado)
                     except Exception:
-                        self.driver.save_screenshot(ruta_guardado)
+                        tabla_resultados = self.driver.find_element(By.XPATH, '/html/body/table/tbody/tr[2]/td/table/tbody/tr[2]/td[2]/table/tbody/tr[3]')
+                        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", tabla_resultados)
+                        time.sleep(0.3)
+                        tabla_resultados.screenshot(ruta_guardado)
                     return True
                     
                 except Exception as e:
