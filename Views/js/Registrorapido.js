@@ -439,7 +439,7 @@ function rrValidarFormulario() {
         dot.className = 'rr-status-dot ' + (listo ? 'ready' : (mensajes.length <= 2 ? 'warning' : ''));
     }
     if (txt) {
-        txt.innerText = listo ? '✓ Listo para procesar' : 'Falta: ' + mensajes.join(', ');
+        txt.innerText = listo ? 'Listo para procesar' : 'Falta: ' + mensajes.join(', ');
     }
 
     // Toggle clase ready en el botón footer que esté visible
@@ -517,7 +517,7 @@ async function rrEjecutarAccion() {
                     activeBtn.style.background = 'rgba(57,255,20,0.2)';
                     activeBtn.style.color = '#39FF14';
                     activeBtn.style.borderColor = '#39FF14';
-                    activeBtn.innerHTML = '✓ Exitoso!';
+                    activeBtn.innerHTML = '<svg class="w-4 h-4 inline-block mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Exitoso!';
                 }
                 if (typeof cargarDatosFastReg === 'function' && window.vistaActual === 'registros') {
                     cargarDatosFastReg();
@@ -652,7 +652,7 @@ async function rrEjecutarAccion() {
                     activeBtn.style.background = 'rgba(57,255,20,0.2)';
                     activeBtn.style.color = '#39FF14';
                     activeBtn.style.borderColor = '#39FF14';
-                    activeBtn.innerHTML = '✓ Exitoso!';
+                    activeBtn.innerHTML = '<svg class="w-4 h-4 inline-block mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Exitoso!';
                 }
             } else {
                 showToast(`Registro Fallido: ${botMensaje}`, 'error');
@@ -661,7 +661,7 @@ async function rrEjecutarAccion() {
                     activeBtn.style.background = 'rgba(239,68,68,0.2)';
                     activeBtn.style.color = '#f87171';
                     activeBtn.style.borderColor = '#ef4444';
-                    activeBtn.innerHTML = '✕ Fallido';
+                    activeBtn.innerHTML = '<svg class="w-4 h-4 inline-block mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Fallido';
                 }
             }
 
@@ -1195,8 +1195,8 @@ function rrActualizarTablaMasivos() {
         // Botón eliminar fila
         html += `
             <td class="p-1.5 text-center">
-                <button type="button" onclick="rrEliminarFilaMasivos(${idx})" class="p-1 hover:bg-red-500/20 text-red-400 rounded-md transition opacity-60 hover:opacity-100" title="Eliminar Fila">
-                    ✕
+                <button type="button" onclick="rrEliminarFilaMasivos(${idx})" class="p-1 hover:bg-red-500/20 text-red-400 rounded-md transition opacity-60 hover:opacity-100 flex items-center justify-center mx-auto" title="Eliminar Fila">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
             </td>
         `;
@@ -1606,7 +1606,7 @@ async function rrEnviarRegistrosMasivos() {
 
         if (res && res.status === 'success') {
             showToast(res.mensaje || 'Registros masivos guardados correctamente', 'success');
-            if (textBtn) textBtn.innerText = '✓ Lote Procesado!';
+            if (textBtn) textBtn.innerHTML = '<svg class="w-4 h-4 inline-block mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Lote Procesado!';
 
             if (typeof cargarDatosFastReg === 'function' && window.vistaActual === 'registros') {
                 cargarDatosFastReg();

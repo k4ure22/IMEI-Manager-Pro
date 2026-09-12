@@ -7,6 +7,10 @@
 let _mdScreenshotActual = null;
 let _mdCuposTimer = null;
 
+function mdIsHeadless() {
+    return ((localStorage.getItem('imei-headless') || '1') === '1');
+}
+
 /* ─── ABRIR / CERRAR ─── */
 async function abrirModelos() {
     document.getElementById('modelosOverlay').classList.add('active');
@@ -69,7 +73,7 @@ function mdMostrarResultado({ iconClass, label, value, meta = [], loading = fals
     if (loading) {
         icon.innerHTML = `<div class="md-spinner"></div>`;
     } else {
-        icon.innerHTML = value.startsWith('❌') || iconClass.includes('error')
+        icon.innerHTML = (value && (value.toLowerCase().includes('error') || value.toLowerCase().includes('fallido') || value.toLowerCase().includes('rechazado') || value.toLowerCase().includes('no encontrado'))) || iconClass.includes('error')
             ? `<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>`
             : iconClass.includes('colombia')
                 ? `<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>`
@@ -123,7 +127,7 @@ async function mdConsultarModeloPro() {
     showToastLoading('Consultando modelo en iunlocker.com...');
 
     try {
-        const res = await window.pywebview.api.consultar_modelo_pro(imei, true);
+        const res = await window.pywebview.api.consultar_modelo_pro(imei, true, mdIsHeadless());
         hideToastLoading();
 
         if (res.status === 'success') {
@@ -193,7 +197,7 @@ async function mdConsultarModeloEstandar() {
     showToastLoading('Consultando modelo estándar...');
 
     try {
-        const res = await window.pywebview.api.consultar_modelo_estandar(imei);
+        const res = await window.pywebview.api.consultar_modelo_estandar(imei, mdIsHeadless());
         hideToastLoading();
 
         if (res.status === 'success') {
@@ -248,7 +252,7 @@ async function mdConsultarImeiColombia() {
     showToastLoading('Consultando estado en IMEI Colombia...');
 
     try {
-        const res = await window.pywebview.api.consultar_imei_colombia_con_pantallazo(imei);
+        const res = await window.pywebview.api.consultar_imei_colombia_con_pantallazo(imei, mdIsHeadless());
         hideToastLoading();
 
         if (res.status === 'success') {
@@ -393,12 +397,12 @@ async function consultarModeloFila(imei, originalIndex) {
 
     try {
         // 1. Ejecutar ConsultarModelo (Estándar) primero
-        let res = await window.pywebview.api.consultar_modelo(imei);
+        let res = await window.pywebview.api.consultar_modelo(imei, mdIsHeadless());
 
         // 2. Si la respuesta es Error o falla, ejecutar automáticamente ConsultarModeloPro
         if (!res || res.status !== 'success' || !res.modelo) {
             showToast('Modelo Estándar falló. Reintentando con Modo Pro...', 'warning');
-            res = await window.pywebview.api.consultar_modelo_pro(imei, false);
+            res = await window.pywebview.api.consultar_modelo_pro(imei, false, mdIsHeadless());
         }
 
         if (res && res.status === 'success' && res.modelo) {

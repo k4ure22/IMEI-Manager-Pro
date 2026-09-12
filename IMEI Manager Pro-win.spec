@@ -97,7 +97,7 @@ a = Analysis(
     hiddenimports=hidden_imports,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=['rthook_pyiceberg.py'],
     excludes=[
         'pandas',
         'matplotlib',
@@ -106,6 +106,9 @@ a = Analysis(
         'IPython',
         'pytest',
         'unittest',
+        'pyiceberg',
+        'pyiceberg.catalog',
+        'pyiceberg.table',
         'tkinter',
         'PyQt5',
         'PySide2',

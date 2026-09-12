@@ -75,7 +75,7 @@ def main():
         with open(full_path, 'w', encoding='utf-8') as f:
             f.write(new_content)
         
-        print(f"✅ Actualizado: {rel_path}")
+        print(f"[OK] Actualizado: {rel_path}")
 
     print("-------------------------------\n")
 
@@ -95,12 +95,12 @@ def main():
                 # Si no existía, lo eliminamos
                 if os.path.exists(full_path):
                     os.remove(full_path)
-                print(f"🗑️ Eliminado (nuevo archivo descartado): {rel_path}")
+                print(f"[TRASH] Eliminado (nuevo archivo descartado): {rel_path}")
             else:
                 # Restaurar el código anterior
                 with open(full_path, 'w', encoding='utf-8') as f:
                     f.write(old_content)
-                print(f"🔄 Restaurado: {rel_path}")
+                print(f"[RESTORE] Restaurado: {rel_path}")
         print("¡Todos los cambios han sido deshechos!")
     else:
         print("¡Cambios conservados exitosamente!")

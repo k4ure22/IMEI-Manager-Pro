@@ -251,6 +251,30 @@ VIEWS_ICONS     = os.path.join(VIEWS_DIR,    "icons")
 MODELS_DIR      = os.path.join(PROJECT_ROOT, "Models")
 _notif_history  = {}
 _notif_lock     = threading.Lock()
+
+# Estados temporales, de carga o no confirmados (se ignoran al evaluar transiciones)
+ESTADOS_PLACEHOLDER = {
+    '', 'consultando...', 'consultando', 'pendiente', 'cargando...', 'cargando',
+    '...', 'sin registrar', 'nuevo', 'en espera', 'error', 'error consulta',
+    'n/a', 'desconocido', 'no disponible', 'null', 'undefined'
+}
+
+# Estados confirmados de bloqueo en bases negativas
+ESTADOS_BLOQUEO_SET = {
+    'robo/hurto', 'robo', 'hurto', 'extravío', 'extravio', 'no registrado', 'bloqueado', 'reportado'
+}
+
+def _es_estado_placeholder(est: str) -> bool:
+    if not est:
+        return True
+    e = str(est).lower().strip()
+    return (e in ESTADOS_PLACEHOLDER) or ('consultando' in e) or ('pendiente' in e) or ('cargando' in e)
+
+def _es_estado_bloqueo(est: str) -> bool:
+    if not est:
+        return False
+    e = str(est).lower().strip()
+    return any(b in e for b in ['robo', 'hurto', 'extravío', 'extravio', 'no registrado', 'bloquead', 'reportad'])
 # ──────────────────────────────────────────────────────────────────
 
 def resource_path(relative_path):
@@ -573,7 +597,7 @@ def limpiar_archivos_desechables(dias=1):
                     pass
 
         if eliminados > 0:
-            print(f"🧹 [Limpieza] Purga de archivos desechables (> {dias} día): {eliminados} archivos/carpetas eliminados.")
+            print(f"[LIMPIEZA] Purga de archivos desechables (> {dias} día): {eliminados} archivos/carpetas eliminados.")
     except Exception as e_clean:
         print(f" [Limpieza] Error al limpiar temporales: {e_clean}")
 
@@ -693,14 +717,27 @@ class Api:
         )
         return hashed.hex()
 
-    def _get_db_status(self) -> str:
+    def _get_db_status_details(self):
+        """Retorna (db_status, maintenance_until) desde Supabase configuracion."""
         try:
-            res = supabase.table('configuracion').select('valor').eq('clave', 'db_status').execute()
-            if res.data:
-                return res.data[0]['valor']
-            return 'active'
-        except:
-            return 'active'
+            res = safe_supabase(lambda: supabase.table('configuracion').select('clave, valor').in_('clave', ['db_status', 'db_maintenance_until']).execute())
+            status = 'active'
+            until = ''
+            if res and res.data:
+                for row in res.data:
+                    c = row.get('clave')
+                    v = row.get('valor') or ''
+                    if c == 'db_status':
+                        status = v
+                    elif c == 'db_maintenance_until':
+                        until = v
+            return status, until
+        except Exception:
+            return 'active', ''
+
+    def _get_db_status(self) -> str:
+        status, _ = self._get_db_status_details()
+        return status
 
     def _is_db_locked(self):
         try:
@@ -713,6 +750,41 @@ class Api:
             return False
 
     # ── AUTENTICACIÓN ──────────────────────────────────────────────
+
+    # -- Helpers de perfil: guardan el nombre en la tabla 'configuracion' --
+    # Esto es necesario porque Supabase Auth user_metadata requiere una sesión
+    # activa para actualizarse, pero la tabla configuracion siempre es accesible.
+
+    def _guardar_perfil_usuario(self, usuario, nombre, avatar_url=""):
+        """Persiste el nombre del usuario en la tabla configuracion."""
+        if not usuario or not nombre:
+            return
+        clave = f"profile:{usuario.lower().strip()}"
+        valor = nombre.strip()
+        try:
+            safe_supabase(lambda: supabase.table('configuracion').upsert(
+                {'clave': clave, 'valor': valor},
+                on_conflict='clave'
+            ).execute())
+            print(f" [Perfil] Nombre guardado en configuracion para {usuario}: {valor}")
+        except Exception as e:
+            print(f" [Perfil] Aviso al guardar perfil en configuracion: {e}")
+
+    def _obtener_perfil_usuario(self, usuario):
+        """Obtiene el nombre del usuario desde la tabla configuracion. Devuelve None si no existe."""
+        if not usuario:
+            return None
+        clave = f"profile:{usuario.lower().strip()}"
+        try:
+            res = safe_supabase(lambda: supabase.table('configuracion').select('valor').eq('clave', clave).limit(1).execute())
+            if res and res.data:
+                nombre = res.data[0].get('valor', '').strip()
+                # Si el nombre guardado se ve como email, descartarlo
+                if nombre and '@' not in nombre:
+                    return nombre
+        except Exception as e:
+            print(f" [Perfil] Aviso al obtener perfil de configuracion: {e}")
+        return None
 
     def registrar_usuario(self, usuario, password, nombre=""):
         email = usuario.strip()
@@ -771,7 +843,11 @@ class Api:
             except Exception as e_sync:
                 print(f" [Registro] Aviso sincronizando tabla usuarios: {e_sync}")
 
-            # 3. Guardar sesión si Supabase la devolvió inmediatamente
+            # 3. Guardar nombre en tabla 'configuracion' para acceso sin sesión Auth
+            if nombre_display:
+                self._guardar_perfil_usuario(email, nombre_display)
+
+            # 4. Guardar sesión si Supabase la devolvió inmediatamente
             if res_auth and res_auth.session:
                 _store_session(res_auth.session.access_token, res_auth.session.refresh_token)
 
@@ -835,7 +911,7 @@ class Api:
         if not usuario or not password:
             return {"status": "error", "mensaje": "El usuario y la contraseña son requeridos."}
         try:
-            db_status = self._get_db_status()
+            db_status, maintenance_until = self._get_db_status_details()
             es_email = "@" in usuario
 
             # 1. Si es formato correo electrónico, intentar autenticación nativa en Supabase Auth primero
@@ -861,12 +937,14 @@ class Api:
                             
                         if db_status == 'paused' and rol != 'admin':
                             supabase.auth.sign_out()
+                            msg = f"Por favor espere hasta las {maintenance_until} o contactese con Martin." if maintenance_until else "Plataforma en mantenimiento. Por favor contactese con Martin."
                             return {
                                 "status": "paused",
-                                "mensaje": "El administrador ha puesto la base de datos en descanso temporal por mantenimiento."
+                                "maintenance_until": maintenance_until,
+                                "mensaje": msg
                             }
                             
-                        nombre_usuario = metadata.get("nombre") or metadata.get("name") or usuario.split('@')[0]
+                        nombre_usuario = self._obtener_perfil_usuario(usuario) or metadata.get("nombre") or metadata.get("name") or usuario.split('@')[0]
                         avatar_url = metadata.get("avatar_url") or metadata.get("foto_perfil") or ""
 
                         self.current_user = {
@@ -904,9 +982,11 @@ class Api:
 
                     rol = user_rec.get('rol', 'user')
                     if db_status == 'paused' and rol != 'admin':
+                        msg = f"Por favor espere hasta las {maintenance_until} o contactese con Martin." if maintenance_until else "Plataforma en mantenimiento. Por favor contactese con Martin."
                         return {
                             "status": "paused",
-                            "mensaje": "El administrador ha puesto la base de datos en descanso temporal por mantenimiento."
+                            "maintenance_until": maintenance_until,
+                            "mensaje": msg
                         }
 
                     self.current_user = {
@@ -961,7 +1041,7 @@ class Api:
         if not access_token or not refresh_token:
             return {"status": "error", "mensaje": "Tokens no válidos."}
         try:
-            db_status = self._get_db_status()
+            db_status, maintenance_until = self._get_db_status_details()
             
             # Establecer la sesión en el cliente de Supabase
             res = supabase.auth.set_session(access_token, refresh_token)
@@ -987,9 +1067,11 @@ class Api:
                 
             if db_status == 'paused' and rol != 'admin':
                 supabase.auth.sign_out()
+                msg = f"Por favor espere hasta las {maintenance_until} o contactese con Martin." if maintenance_until else "Plataforma en mantenimiento. Por favor contactese con Martin."
                 return {
                     "status": "paused",
-                    "mensaje": "El administrador ha puesto la base de datos en descanso temporal por mantenimiento."
+                    "maintenance_until": maintenance_until,
+                    "mensaje": msg
                 }
                 
             nombre_usuario = metadata.get("nombre") or metadata.get("name") or usuario.split('@')[0]
@@ -1102,25 +1184,26 @@ class Api:
             return {"status": "error", "mensaje": str(e)}
 
     def leer_imagen_base64(self, ruta):
-        """Lee un archivo de imagen y lo convierte en una data URI base64 optimizada (96x96 px)."""
+        """Lee un archivo de imagen y lo convierte en una data URI base64 para mostrar en UI.
+        Usa hasta 512x512 px con calidad 92 % para preservar nitidez en la pantalla.
+        La compresión agresiva solo ocurre al guardar en Supabase (actualizar_perfil)."""
         try:
             import base64
             with open(ruta, "rb") as f:
                 data = f.read()
-            # Redimensionar avatar a max 96x96 px JPEG para que ocupe ~1.5 KB
-            # evitando inflar la cabecera HTTP JWT (causa de Broken Pipe)
             try:
                 from PIL import Image
                 import io
                 img = Image.open(io.BytesIO(data))
                 img = img.convert("RGB")
-                img.thumbnail((96, 96), Image.LANCZOS)
+                # Máximo 512x512 para display de alta calidad
+                img.thumbnail((512, 512), Image.LANCZOS)
                 buf = io.BytesIO()
-                img.save(buf, format="JPEG", optimize=True, quality=65)
+                img.save(buf, format="JPEG", optimize=True, quality=92)
                 data = buf.getvalue()
                 mime = "image/jpeg"
             except Exception as img_err:
-                print(f" [Avatar] Error optimizando avatar: {img_err}")
+                print(f" [Avatar] Error procesando avatar: {img_err}")
                 mime = "image/png"
             b64 = base64.b64encode(data).decode("utf-8")
             data_url = f"data:{mime};base64,{b64}"
@@ -1129,36 +1212,64 @@ class Api:
             return {"status": "error", "mensaje": str(e)}
 
     def actualizar_perfil(self, nombre, avatar_data_url=""):
-        """Actualiza el display name y avatar del usuario en Supabase user_metadata."""
+        """Actualiza el display name y avatar del usuario en Supabase user_metadata.
+        El avatar se comprime a 96x96 px / calidad 65 % antes de guardarlo en los
+        metadatos del JWT de Supabase, evitando el error de Broken Pipe por cabeceras
+        demasiado grandes. La imagen de alta calidad solo se usa para el display en UI.
+        """
         try:
             nombre = (nombre or "").strip()
             if not nombre:
                 return {"status": "error", "mensaje": "El nombre no puede estar vacío."}
 
+            # Comprimir avatar a tamaño JWT-safe (96x96 / 65 %) antes de guardar
+            avatar_para_supabase = avatar_data_url
+            if avatar_data_url and avatar_data_url.startswith("data:"):
+                try:
+                    import base64, io
+                    from PIL import Image
+                    header, b64data = avatar_data_url.split(",", 1)
+                    raw = base64.b64decode(b64data)
+                    img = Image.open(io.BytesIO(raw)).convert("RGB")
+                    img.thumbnail((96, 96), Image.LANCZOS)
+                    buf = io.BytesIO()
+                    img.save(buf, format="JPEG", optimize=True, quality=65)
+                    compressed = base64.b64encode(buf.getvalue()).decode("utf-8")
+                    avatar_para_supabase = f"data:image/jpeg;base64,{compressed}"
+                except Exception as compress_err:
+                    print(f" [Perfil] Aviso al comprimir avatar: {compress_err}")
+                    # Usar la original si falla la compresión
+
             update_data = {"nombre": nombre}
             if avatar_data_url:
-                update_data["avatar_url"] = avatar_data_url
+                update_data["avatar_url"] = avatar_para_supabase
 
-            res = supabase.auth.update_user({"data": update_data})
-            if not res.user:
-                return {"status": "error", "mensaje": "No se pudo actualizar el perfil."}
+            # 1. Guardar siempre en la tabla configuracion (no requiere sesión Auth activa)
+            if self.current_user:
+                self._guardar_perfil_usuario(self.current_user.get('usuario', ''), nombre)
 
-            # Re-establecer sesión: update_user rota el token, sin esto todas
-            # las consultas siguientes a la BD fallarán por sesión inválida.
+            # 2. Intentar actualizar en Supabase Auth (puede fallar si no hay sesión activa)
             try:
-                if res.session:
-                    supabase.auth.set_session(res.session.access_token, res.session.refresh_token)
-                    _store_session(res.session.access_token, res.session.refresh_token)
-                    if self.current_user:
-                        self.current_user["access_token"] = res.session.access_token
-                        self.current_user["refresh_token"] = res.session.refresh_token
-                else:
-                    # Si no devuelve sesión, intentar refrescarla
-                    supabase.auth.refresh_session()
-            except Exception as sess_err:
-                print(f" [Perfil] Aviso al re-establecer sesión: {sess_err}")
+                res = supabase.auth.update_user({"data": update_data})
+                if res.user:
+                    # Re-establecer sesión: update_user rota el token
+                    try:
+                        if res.session:
+                            supabase.auth.set_session(res.session.access_token, res.session.refresh_token)
+                            _store_session(res.session.access_token, res.session.refresh_token)
+                            if self.current_user:
+                                self.current_user["access_token"] = res.session.access_token
+                                self.current_user["refresh_token"] = res.session.refresh_token
+                        else:
+                            supabase.auth.refresh_session()
+                    except Exception as sess_err:
+                        print(f" [Perfil] Aviso al re-establecer sesión: {sess_err}")
+            except Exception as auth_err:
+                # Si falla Auth (ej. "Auth session missing!"), la info ya quedó guardada
+                # en la tabla configuracion, así que continuamos sin error.
+                print(f" [Perfil] Aviso al actualizar Supabase Auth (no fatal): {auth_err}")
 
-            # Actualizar current_user en memoria
+            # 3. Actualizar current_user en memoria
             if self.current_user:
                 self.current_user["nombre"] = nombre
                 if avatar_data_url:
@@ -1174,6 +1285,7 @@ class Api:
             }
         except Exception as e:
             return {"status": "error", "mensaje": f"Error al actualizar perfil: {str(e)}"}
+
 
     def validar_soporte_biometrico(self):
         if sys.platform != "darwin":
@@ -1242,8 +1354,8 @@ class Api:
 
     def obtener_estado_bd(self):
         try:
-            status = self._get_db_status()
-            return {"status": "success", "db_status": status}
+            status, until = self._get_db_status_details()
+            return {"status": "success", "db_status": status, "maintenance_until": until}
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
 
@@ -1254,32 +1366,43 @@ class Api:
         print("[API] Forzando reconexión y reinicio con la Base de Datos...")
         try:
             reset_supabase_client()
-            status = self._get_db_status()
+            status, until = self._get_db_status_details()
             return {
                 "status": "success",
                 "mensaje": "Conexión a la base de datos reestablecida con éxito",
-                "db_status": status
+                "db_status": status,
+                "maintenance_until": until
             }
         except Exception as e:
             print(f" [API] Error al reconectar la BD: {e}")
             return {"status": "error", "mensaje": f"Error al reconectar BD: {str(e)}"}
 
-    def cambiar_estado_bd(self, usuario_admin, nuevo_estado):
+    def cambiar_estado_bd(self, usuario_admin, nuevo_estado, fecha_reactivacion=None):
         if nuevo_estado not in ['active', 'paused']:
             return {"status": "error", "mensaje": "Estado de base de datos inválido."}
         try:
-            res = supabase.table('usuarios').select('rol').eq('usuario', usuario_admin).execute()
-            if not res.data or res.data[0]['rol'] != 'admin':
+            # Validar rol desde caché local (evita consultar Supabase cuando la BD está pausada)
+            if not self.current_user or self.current_user.get('rol') != 'admin':
                 return {"status": "error", "mensaje": "Permiso denegado. Se requiere ser Administrador."}
+
             existing = supabase.table('configuracion').select('clave').eq('clave', 'db_status').execute()
             if existing.data:
                 supabase.table('configuracion').update({'valor': nuevo_estado}).eq('clave', 'db_status').execute()
             else:
                 supabase.table('configuracion').insert({'clave': 'db_status', 'valor': nuevo_estado}).execute()
-            etiqueta = 'ACTIVA' if nuevo_estado == 'active' else 'EN DESCANSO'
+
+            until_val = str(fecha_reactivacion or '').strip() if nuevo_estado == 'paused' else ''
+            ex_until = supabase.table('configuracion').select('clave').eq('clave', 'db_maintenance_until').execute()
+            if ex_until.data:
+                supabase.table('configuracion').update({'valor': until_val}).eq('clave', 'db_maintenance_until').execute()
+            else:
+                supabase.table('configuracion').insert({'clave': 'db_maintenance_until', 'valor': until_val}).execute()
+
+            etiqueta = 'ACTIVA' if nuevo_estado == 'active' else 'EN MANTENIMIENTO'
             return {
                 "status": "success",
                 "db_status": nuevo_estado,
+                "maintenance_until": until_val,
                 "mensaje": f"Base de datos cambiada a estado: {etiqueta}."
             }
         except Exception as e:
@@ -1577,18 +1700,18 @@ class Api:
                 'RAZÓN': existente_fast.get('RAZÓN') or 'Registro ETB'
             }
             safe_supabase(lambda: supabase.table('FastReg').upsert(fast_payload).execute())
-            print(f"✅ [FastReg] Registro sincronizado en FastReg para IMEI {imei} (ETB)")
+            print(f"[OK] [FastReg] Registro sincronizado en FastReg para IMEI {imei} (ETB)")
 
             if linea_etb:
                 try:
                     safe_supabase(lambda: supabase.table('lineas').update({'las_use': ahora_iso}).eq('numero', str(linea_etb).strip()).execute())
                 except Exception as le:
-                    print(f"⚠️ Error actualizando las_use: {le}")
+                    print(f"[WARN] Error actualizando las_use: {le}")
 
             if self.window:
                 self.window.evaluate_js("if (typeof window.recibirActualizacionFastReg === 'function') { window.recibirActualizacionFastReg(); }")
         except Exception as e_fast:
-            print(f"⚠️ Error guardando en FastReg (ETB): {e_fast}")
+            print(f"[WARN] Error guardando en FastReg (ETB): {e_fast}")
         
         def run_bot():
             import json
@@ -1639,7 +1762,7 @@ class Api:
             res = safe_supabase(lambda: supabase.table('encargados').select('*').execute())
             return res.data if res.data else []
         except Exception as e:
-            print(f"❌ [API] Error en obtener_todos_encargados: {e}")
+            print(f"[ERROR] [API] Error en obtener_todos_encargados: {e}")
             return []
 
     def obtener_encargado(self, nombre):
@@ -1647,7 +1770,7 @@ class Api:
             res = safe_supabase(lambda: supabase.table('encargados').select('*').eq('nombre', nombre).execute())
             return res.data[0] if res.data else None
         except Exception as e:
-            print(f"❌ [API] Error en obtener_encargado: {e}")
+            print(f"[ERROR] [API] Error en obtener_encargado: {e}")
             return None
 
     def guardar_encargado(self, datos):
@@ -1726,7 +1849,7 @@ class Api:
                 msg = mensaje or f"Prueba de notificación para IMEI {imei_val}"
                 razon = "Prueba"
 
-            print(f"🧪 [TEST NOTIF] Emitiendo notificación de prueba ({tipo_lower}): {msg}")
+            print(f"[TEST NOTIF] Emitiendo notificación de prueba ({tipo_lower}): {msg}")
 
             # 1. Enviar notificación nativa al SO (Windows / macOS)
             self._enviar_notificacion_nativa("IMEI Manager Pro", msg, subtitulo=sub)
@@ -1758,7 +1881,7 @@ class Api:
             with _notif_lock:
                 last_time = _notif_history.get(dedup_key, 0)
                 if now - last_time < 5.0:
-                    print(f"🔇 [Notificación Nativa] Descartada duplicada en ventana de 5s: {dedup_key}")
+                    print(f"[MUTE] [Notificación Nativa] Descartada duplicada en ventana de 5s: {dedup_key}")
                     return
                 _notif_history[dedup_key] = now
                 for k in list(_notif_history.keys()):
@@ -1832,9 +1955,9 @@ class Api:
                     cmd.extend(['-i', icon_path])
                 subprocess.Popen(cmd)
             else:
-                print(f"🔔 [Notificación Nativa]: {titulo_clean} - {subtitulo_clean} - {mensaje_clean}")
+                print(f"[NOTIF] [Notificación Nativa]: {titulo_clean} - {subtitulo_clean} - {mensaje_clean}")
         except Exception as e:
-            print(f"⚠️ Error enviando notificación nativa: {e}")
+            print(f"[WARN] Error enviando notificación nativa: {e}")
 
     def _monitor_registros_bg(self):
         import time
@@ -1851,9 +1974,7 @@ class Api:
         intervalo_actual = INTERVALO_BASE
         errores_consecutivos = 0
 
-        estados_bloqueo_set = {'robo/hurto', 'extravío', 'extravio', 'no registrado'}
-
-        print("📡 [Realtime] Monitoreando cambios de estado en 'registros' y 'FastReg' (intervalo: 3s)...")
+        print("[REALTIME] Monitoreando cambios de estado en 'registros' y 'FastReg' (intervalo: 3s)...")
         while True:
             try:
                 if self._is_db_locked():
@@ -1881,24 +2002,47 @@ class Api:
 
                                 if old_estado != new_estado and old_estado != '' and new_estado != '':
                                     cambios_detectados = True
-                                    print(f"🔄 [Realtime Estado] IMEI {imei} cambió de '{old_estado}' a '{new_estado}'")
+                                    print(f"[REALTIME Estado] IMEI {imei} cambió de '{old_estado}' a '{new_estado}'")
 
-                                    # Detectar desbloqueo (de estado de bloqueo a Libre)
-                                    if (old_est_low in estados_bloqueo_set or 'libre' not in old_est_low) and 'libre' in new_est_low:
-                                        msg = f"El IMEI {imei} ha sido desbloqueado"
-                                        self._enviar_notificacion_nativa("IMEI Manager Pro", msg, subtitulo="IMEI Desbloqueado")
+                                    # Si el estado anterior era placeholder (ej. 'Consultando...'), es la primera consulta del ingreso.
+                                    # La primera consulta NO debe mostrar ninguna notificación a menos que sea el estado esperado del trabajo final.
+                                    era_placeholder = _es_estado_placeholder(old_est_low)
+                                    es_placeholder_nuevo = _es_estado_placeholder(new_est_low)
 
-                                    # Detectar bloqueo (de Libre a estado de bloqueo)
-                                    elif 'libre' in old_est_low and (new_est_low in estados_bloqueo_set or 'libre' not in new_est_low):
-                                        msg = f"El IMEI {imei} ha sido bloqueado"
-                                        self._enviar_notificacion_nativa("IMEI Manager Pro", msg, subtitulo=f"IMEI Bloqueado ({new_estado})")
+                                    if not es_placeholder_nuevo:
+                                        if era_placeholder:
+                                            # Primera consulta tras registro: solo notificar si ya es el trabajo final exitoso
+                                            if self._evaluar_estado_registro(new_reg) == "exitoso":
+                                                razon_orig = (new_reg.get('razon') or '').lower().strip()
+                                                if "desbloqueo" in razon_orig or "no registro" in razon_orig:
+                                                    msg = f"El IMEI {imei} ha sido desbloqueado"
+                                                    self._enviar_notificacion_nativa("IMEI Manager Pro", msg, subtitulo="IMEI Desbloqueado")
+                                                elif "bloqueo" in razon_orig:
+                                                    msg = f"El IMEI {imei} ha sido bloqueado"
+                                                    self._enviar_notificacion_nativa("IMEI Manager Pro", msg, subtitulo=f"IMEI Bloqueado ({new_estado})")
+                                        else:
+                                            # Cambio entre estados confirmados posteriores
+                                            es_bloqueado_previo = _es_estado_bloqueo(old_est_low)
+                                            es_libre_nuevo = 'libre' in new_est_low
+                                            es_libre_previo = 'libre' in old_est_low
+                                            es_bloqueado_nuevo = _es_estado_bloqueo(new_est_low)
 
-                                    # Otro cambio relevante
-                                    else:
-                                        msg = f"El IMEI {imei} cambió a {new_estado}"
-                                        self._enviar_notificacion_nativa("IMEI Manager Pro", msg, subtitulo="Actualización de Estado")
+                                            # Detectar desbloqueo (de bloqueo confirmado a Libre)
+                                            if es_bloqueado_previo and es_libre_nuevo:
+                                                msg = f"El IMEI {imei} ha sido desbloqueado"
+                                                self._enviar_notificacion_nativa("IMEI Manager Pro", msg, subtitulo="IMEI Desbloqueado")
 
-                                    # Actualizar en tiempo real el frontend
+                                            # Detectar bloqueo (de Libre a estado de bloqueo confirmado)
+                                            elif es_libre_previo and es_bloqueado_nuevo:
+                                                msg = f"El IMEI {imei} ha sido bloqueado"
+                                                self._enviar_notificacion_nativa("IMEI Manager Pro", msg, subtitulo=f"IMEI Bloqueado ({new_estado})")
+
+                                            # Otro cambio relevante entre estados confirmados si culmina en éxito
+                                            elif old_est_low != new_est_low and self._evaluar_estado_registro(new_reg) == "exitoso":
+                                                msg = f"El IMEI {imei} cambió a {new_estado}"
+                                                self._enviar_notificacion_nativa("IMEI Manager Pro", msg, subtitulo="Actualización de Estado")
+
+                                    # Actualizar en tiempo real el frontend siempre
                                     if self.window:
                                         op_val = new_reg.get('operador') or ''
                                         self.window.evaluate_js(
@@ -1922,20 +2066,20 @@ class Api:
                     fast_hash = hashlib.sha256(fast_json.encode('utf-8')).hexdigest()
 
                     if last_fastreg_hash is not None and fast_hash != last_fastreg_hash:
-                        print("🔄 [Realtime] Cambio detectado en 'FastReg', avisando al frontend...")
+                        print("[REALTIME] Cambio detectado en 'FastReg', avisando al frontend...")
                         if self.window:
                             self.window.evaluate_js("if (typeof window.recibirActualizacionFastReg === 'function') { window.recibirActualizacionFastReg(); }")
                     last_fastreg_hash = fast_hash
 
                 if errores_consecutivos > 0:
-                    print(f"✅ [Realtime] Conexión restablecida tras {errores_consecutivos} error(es).")
+                    print(f"[OK] [Realtime] Conexión restablecida tras {errores_consecutivos} error(es).")
                 errores_consecutivos = 0
                 intervalo_actual = INTERVALO_BASE
 
             except Exception as e:
                 errores_consecutivos += 1
                 intervalo_actual = min(INTERVALO_BASE * (2 ** errores_consecutivos), INTERVALO_MAX)
-                print(f"❌ [Realtime Error] Error monitoreando registros ({errores_consecutivos}x): {e} — reintentando en {intervalo_actual}s")
+                print(f"[ERROR] [Realtime Error] Error monitoreando registros ({errores_consecutivos}x): {e} — reintentando en {intervalo_actual}s")
 
             time.sleep(intervalo_actual)
 
@@ -1951,7 +2095,7 @@ class Api:
         errores_consecutivos = 0
 
         time.sleep(2)
-        print("📡 [Realtime] Monitoreando notificaciones y solicitudes en BD (intervalo: 3s)...")
+        print("[REALTIME] Monitoreando notificaciones y solicitudes en BD (intervalo: 3s)...")
         while True:
             try:
                 if self._is_db_locked():
@@ -1979,8 +2123,15 @@ class Api:
 
                         # Despachar notificaciones de más vieja a más nueva
                         for notif in reversed(new_notifications):
+                            imei = str(notif.get('IMEI') or notif.get('imei') or '').strip()
+                            if not self._es_admin():
+                                hidden_imeis = self._get_hidden_imeis()
+                                if imei and imei in hidden_imeis:
+                                    print(f"[NOTIF] [RBAC] Notificación omitida para no-admin (IMEI {imei} de cliente oculto).")
+                                    continue
+
                             notif_json = json.dumps(notif)
-                            print(f"🔔 [Realtime] Nueva notificación en BD: {notif}")
+                            print(f"[NOTIF] [Realtime] Nueva notificación en BD: {notif}")
                             if self.window:
                                 self.window.evaluate_js(f"if (typeof window.recibirNotificacionRealtime === 'function') {{ window.recibirNotificacionRealtime({notif_json}); }}")
 
@@ -2017,25 +2168,25 @@ class Api:
 
                 # Reset en caso de éxito
                 if errores_consecutivos > 0:
-                    print(f"✅ [Realtime Notif] Conexión restablecida tras {errores_consecutivos} error(es).")
+                    print(f"[OK] [Realtime Notif] Conexión restablecida tras {errores_consecutivos} error(es).")
                 errores_consecutivos = 0
                 intervalo_actual = INTERVALO_BASE
 
             except Exception as e:
                 errores_consecutivos += 1
                 intervalo_actual = min(INTERVALO_BASE * (2 ** errores_consecutivos), INTERVALO_MAX)
-                print(f"⚠️ [Realtime] Error al monitorear notificaciones ({errores_consecutivos}x): {e} — reintentando en {intervalo_actual}s")
+                print(f"[WARN] [Realtime] Error al monitorear notificaciones ({errores_consecutivos}x): {e} — reintentando en {intervalo_actual}s")
 
             time.sleep(intervalo_actual)
 
     def _evaluar_estado_registro(self, reg):
         if not reg:
             return "pendiente"
-        estado = (reg.get('estado') or '').lower()
-        razon = (reg.get('razon') or '').lower()
+        estado = (reg.get('estado') or '').lower().strip()
+        razon = (reg.get('razon') or '').lower().strip()
         reg_wom = (reg.get('reg_wom') or '')
         reg_etb = (reg.get('reg_etb') or '')
-        if not estado or not razon:
+        if not estado or not razon or _es_estado_placeholder(estado):
             return "pendiente"
         if "registro" in razon and "no registro" not in razon:
             wom_exito = reg_wom and reg_wom not in ['No', 'Error', '']
@@ -2044,55 +2195,89 @@ class Api:
         if "desbloqueo" in razon or "no registro" in razon:
             return "exitoso" if "libre" in estado else "pendiente"
         if "bloqueo" in razon:
-            return "exitoso" if "libre" not in estado else "pendiente"
+            return "exitoso" if _es_estado_bloqueo(estado) else "pendiente"
         return "pendiente"
 
     def _crear_notificacion_si_cambia_a_exitoso(self, imei, old_reg, new_reg):
-        if not old_reg or not new_reg:
+        if not new_reg:
             return
-        old_status = self._evaluar_estado_registro(old_reg)
+
+        new_estado = (new_reg.get('estado') or '').lower().strip()
+        if _es_estado_placeholder(new_estado):
+            return
+
         new_status = self._evaluar_estado_registro(new_reg)
-        if old_status == "pendiente" and new_status == "exitoso":
-            from datetime import datetime
-            modelo = new_reg.get('modelo') or 'Dispositivo'
-            razon_orig = (new_reg.get('razon') or '').lower()
-            if "desbloqueo" in razon_orig or "no registro" in razon_orig:
-                razon_notif = "Desbloqueo"
-            elif "bloqueo" in razon_orig:
-                razon_notif = "Bloqueo"
-            else:
-                razon_notif = "Desbloqueo"
-            data = {
-                'IMEI': imei,
-                'Razon': razon_notif,
-                'modelo': modelo,
-                'ingreso': datetime.now().astimezone().isoformat()
-            }
-            try:
-                # Si el trigger de BD ya registró esta notificación recientemente, evitar duplicar
-                check_res = safe_supabase(lambda: supabase.table('Solicitud').select('id').eq('IMEI', str(imei)).order('id', desc=True).limit(1).execute())
-                if check_res and check_res.data:
-                    print(f"ℹ️ [NOTIFICACIÓN] Notificación ya presente en BD para IMEI {imei}.")
-                    return
-                supabase.table('Solicitud').insert(data).execute()
-                print(f"✅ [NOTIFICACIÓN] Registrada para IMEI {imei}")
-            except Exception as ne:
-                print(f"❌ [NOTIFICACIÓN] Error al registrar: {ne}")
+        # Solo interesa si el nuevo estado es el esperado para el trabajo final ("exitoso")
+        if new_status != "exitoso":
+            return
+
+        old_estado = (old_reg.get('estado') or '').lower().strip() if old_reg else ''
+        old_status = self._evaluar_estado_registro(old_reg) if old_reg else 'pendiente'
+
+        # Si ya era exitoso antes, no re-notificar duplicado
+        if old_status == "exitoso":
+            return
+
+        era_placeholder = _es_estado_placeholder(old_estado)
+
+        razon_orig = (new_reg.get('razon') or '').lower().strip()
+        if "desbloqueo" in razon_orig or "no registro" in razon_orig:
+            # Si viene de estado confirmado anterior que no era bloqueo → ignorar
+            if old_estado and not era_placeholder and not _es_estado_bloqueo(old_estado):
+                return
+            # Si era placeholder y razón es "Desbloqueo" → primer scrape de un registro
+            # recién ingresado como desbloqueo. Notificar porque confirma el estado esperado.
+            razon_notif = "Desbloqueo"
+        elif "bloqueo" in razon_orig:
+            # Si viene de estado confirmado anterior que no era libre → ignorar
+            if old_estado and not era_placeholder and 'libre' not in old_estado:
+                return
+            # Si era placeholder y razón es "Bloqueo" → primer scrape de registro recién
+            # ingresado. NO notificar: el usuario acababa de ingresarlo como bloqueo,
+            # la confirmación no es un evento nuevo de bloqueo.
+            if era_placeholder:
+                print(f"[INFO] [NOTIFICACIÓN] Suprimida para IMEI {imei}: primera consulta de registro nuevo con Bloqueo.")
+                return
+            razon_notif = "Bloqueo"
+        else:
+            razon_notif = "Registro"
+
+        from datetime import datetime
+        modelo = new_reg.get('modelo') or 'Dispositivo'
+        data = {
+            'IMEI': imei,
+            'Razon': razon_notif,
+            'modelo': modelo,
+            'ingreso': datetime.now().astimezone().isoformat()
+        }
+        try:
+            # Si ya existe una notificación reciente para este IMEI, evitar duplicar
+            check_res = safe_supabase(lambda: supabase.table('Solicitud').select('id').eq('IMEI', str(imei)).order('id', desc=True).limit(1).execute())
+            if check_res and check_res.data:
+                print(f"[INFO] [NOTIFICACIÓN] Notificación ya presente en BD para IMEI {imei}.")
+                return
+            supabase.table('Solicitud').insert(data).execute()
+            print(f"[OK] [NOTIFICACIÓN] Registrada para IMEI {imei} (Razón: {razon_notif})")
+        except Exception as ne:
+            print(f"[ERROR] [NOTIFICACIÓN] Error al registrar: {ne}")
 
     def obtener_notificaciones(self):
         if not self.current_user:
             return {"status": "success", "data": []}
-        print("📡 [API] Solicitando notificaciones...")
+        print("[API] Solicitando notificaciones...")
         if self._is_db_locked():
-            print("⚠️ [API] Acceso bloqueado a notificaciones: La BD está en descanso.")
+            print("[WARN] [API] Acceso bloqueado a notificaciones: La BD está en descanso.")
             return {"status": "error", "mensaje": "La base de datos está actualmente en descanso."}
         try:
             res = safe_supabase(lambda: supabase.table('Solicitud').select('*').order('id', desc=True).execute())
             data = res.data if res.data else []
-            print(f"✅ [API] Enviando {len(data)} notificaciones.")
+            if not self._es_admin():
+                hidden_imeis = self._get_hidden_imeis()
+                data = [n for n in data if str(n.get('IMEI') or n.get('imei') or '').strip() not in hidden_imeis]
+            print(f"[OK] [API] Enviando {len(data)} notificaciones.")
             return {"status": "success", "data": data}
         except Exception as e:
-            print(f"❌ [API] Error en obtener_notificaciones: {e}")
+            print(f"[ERROR] [API] Error en obtener_notificaciones: {e}")
             return {"status": "error", "mensaje": str(e)}
 
     def eliminar_notificacion(self, notif_id):
@@ -2115,28 +2300,28 @@ class Api:
 
     def obtener_registros(self):
         if not self.current_user:
-            print("⚠️ [API] obtener_registros bloqueado: no hay sesión activa.")
+            print("[WARN] [API] obtener_registros bloqueado: no hay sesión activa.")
             return []
         if self._is_db_locked():
-            print("⚠️ [API] Acceso bloqueado a registros: La BD está en descanso.")
+            print("[WARN] [API] Acceso bloqueado a registros: La BD está en descanso.")
             return []
-        print("📡 [API] Solicitando registros...")
+        print("[API] Solicitando registros...")
         try:
             res = safe_supabase(lambda: supabase.table('registros').select('*').execute())
             data = res.data if res and res.data else []
             if not self._es_admin():
                 hidden_ids, hidden_names = self._get_hidden_client_identifiers()
                 data = [r for r in data if not self._is_hidden_client(r.get('cliente'), hidden_ids, hidden_names)]
-            print(f"✅ [API] Enviando {len(data)} registros.")
+            print(f"[OK] [API] Enviando {len(data)} registros.")
             return data
         except Exception as e:
-            print(f"❌ [API] Error en obtener_registros: {e}")
+            print(f"[ERROR] [API] Error en obtener_registros: {e}")
             return []
 
     def guardar_registro(self, datos):
         if self._is_db_locked():
             return {"status": "error", "mensaje": "La base de datos está actualmente en descanso. Acción no permitida."}
-        print(f"📡 [API] Guardando nuevo registro: {datos.get('imei')}")
+        print(f"[API] Guardando nuevo registro: {datos.get('imei')}")
         try:
             data = {
                 'imei': datos['imei'],
@@ -2149,12 +2334,12 @@ class Api:
                 'pago': datos['pago']
             }
             supabase.table('registros').insert(data).execute()
-            print("✅ [API] Registro guardado con éxito.")
+            print("[OK] [API] Registro guardado con éxito.")
             return {"status": "success"}
         except Exception as e:
             error_msg = str(e)
             if 'duplicate key' in error_msg.lower() or '23505' in error_msg:
-                print("⚠️ [API] IMEI ya existe.")
+                print("[WARN] [API] IMEI ya existe.")
                 return {"status": "error", "mensaje": "Este IMEI ya está registrado."}
             return {"status": "error", "mensaje": error_msg}
 
@@ -2178,18 +2363,18 @@ class Api:
                     if old_res.data:
                         old_reg = old_res.data[0]
             except Exception as he:
-                print(f"⚠️ [Hook] Error fetching old record: {he}")
+                print(f"[WARN] [Hook] Error fetching old record: {he}")
 
             try:
                 supabase.table('registros').update({campo: valor}).eq('imei', imei).execute()
             except Exception as ue:
                 err_str = str(ue)
-                print(f"⚠️ [Hook] Advertencia al actualizar campo '{campo}' en BD: {err_str}")
+                print(f"[WARN] [Hook] Advertencia al actualizar campo '{campo}' en BD: {err_str}")
                 if "schema \"net\" does not exist" in err_str or "3F000" in err_str:
-                    print("💡 [Trigger BD] Trigger pg_net falló — reintentando con REST directo...")
+                    print("[RETRY] [Trigger BD] Trigger pg_net falló — reintentando con REST directo...")
                     ok = _update_supabase_directo('registros', {campo: valor}, imei)
                     if not ok:
-                        print(f"❌ [Hook] No se pudo guardar '{campo}' ni con retry directo.")
+                        print(f"[ERROR] [Hook] No se pudo guardar '{campo}' ni con retry directo.")
                         return {"status": "error", "mensaje": f"No se pudo guardar el campo '{campo}' en la base de datos (trigger pg_net no disponible)."}
                     # Continuar con la lógica de notificación aunque el trigger falló
                 else:
@@ -2202,7 +2387,7 @@ class Api:
                         new_reg = new_res.data[0]
                         self._crear_notificacion_si_cambia_a_exitoso(imei, old_reg, new_reg)
             except Exception as he:
-                print(f"⚠️ [Hook] Error executing notification check: {he}")
+                print(f"[WARN] [Hook] Error executing notification check: {he}")
 
             return {"status": "success"}
         except Exception as e:
@@ -2279,7 +2464,7 @@ class Api:
                             'fecha_declaracion_generada': fecha_envio
                         }).eq('imei', str(imei).strip()).execute())
                     except Exception as e_sup:
-                        print(f"⚠️ Error actualizando fecha_declaracion_generada en Supabase: {e_sup}")
+                        print(f"[WARN] Error actualizando fecha_declaracion_generada en Supabase: {e_sup}")
                 if self.window:
                     icon = 'save' if resultado.get('status') == 'success' else 'error'
                     self.window.evaluate_js(f"showToast('{msg}', '{icon}')")
@@ -2363,7 +2548,7 @@ class Api:
     # Pegar estos métodos dentro de la clase Api, en la sección ── MODELOS ──
     # Reemplaza los métodos consultar_modelo, consultar_modelo_solo y consultar_modelos
 
-    def consultar_modelo_pro(self, imei, con_pantallazo=False):
+    def consultar_modelo_pro(self, imei, con_pantallazo=False, headless=True):
         """
         Ejecuta ConsultarModeloPro.py como subprocess.
         Retorna {status, modelo, screenshot_path?, consultas_restantes}
@@ -2374,6 +2559,8 @@ class Api:
             cmd = script_command("ConsultarModeloPro.py") + [str(imei)]
             if con_pantallazo:
                 cmd.append("--screenshot")
+            if not headless:
+                cmd.append("--visible")
 
             proc, stdout, _ = run_subprocess_safe(cmd, timeout=60)
 
@@ -2389,14 +2576,16 @@ class Api:
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
 
-    def consultar_modelo_estandar(self, imei):
+    def consultar_modelo_estandar(self, imei, headless: bool = True):
         """
         Ejecuta ConsultarModelo.py como subprocess.
         Retorna {status, modelo, screenshot_path}
         """
         import json as _json
         try:
-            cmd = script_command("ConsultarModelo.py") + [str(imei), "--headless"]
+            cmd = script_command("ConsultarModelo.py") + [str(imei)]
+            if headless:
+                cmd.append("--headless")
             proc, stdout, stderr = run_subprocess_safe(cmd, timeout=60)
 
             for line in reversed(stdout.splitlines()):
@@ -2435,6 +2624,24 @@ class Api:
                     return _json.loads(line)
 
             return self._leer_estado_cupos_directo()
+        except Exception as e:
+            return {"status": "error", "mensaje": str(e), "consultas_restantes": 0}
+
+    def validar_web_cupos_modelo(self):
+        """
+        Valida en vivo contra iunlocker.com si el sitio ya permite consultas de Modelo Pro.
+        Si la página sigue bloqueada, no reinicia el conteo y retorna tiempo restante real.
+        Si la página está lista, reinicia los 5 cupos.
+        """
+        import json as _json
+        try:
+            cmd = script_command("ConsultarModeloPro.py") + ["--validar-web"]
+            proc, stdout, _ = run_subprocess_safe(cmd, timeout=30)
+            for line in reversed(stdout.splitlines()):
+                line = line.strip()
+                if line.startswith("{"):
+                    return _json.loads(line)
+            return self.obtener_estado_cupos_modelo()
         except Exception as e:
             return {"status": "error", "mensaje": str(e), "consultas_restantes": 0}
 
@@ -2498,7 +2705,7 @@ class Api:
                 "minutos": 0
             }
 
-    def consultar_imei_colombia_con_pantallazo(self, imei):
+    def consultar_imei_colombia_con_pantallazo(self, imei, headless: bool = True):
         """
         Consulta IMEI Colombia (estado/operador) + toma pantallazo.
         Guarda screenshot en Controllers/temp_screenshots/<imei>_colombia.png
@@ -2511,12 +2718,12 @@ class Api:
             ruta = os.path.join(temp_dir, f"{imei}_colombia.png")
 
             # Estado/operador
-            scraper_est = ScraperEstado(headless=True)
+            scraper_est = ScraperEstado(headless=headless)
             estado, operador = scraper_est.consultar(imei)
             scraper_est.close()
 
             # Pantallazo
-            scraper_pan = ScraperPantallazo(headless=True)
+            scraper_pan = ScraperPantallazo(headless=headless)
             scraper_pan.consultar_y_capturar(imei, ruta)
             scraper_pan.close()
 
@@ -2546,6 +2753,8 @@ class Api:
             for imei in imeis:
                 try:
                     cmd = script_command("ConsultarModeloPro.py") + [str(imei)]
+                    if not headless:
+                        cmd.append("--visible")
                     proc, stdout, _ = run_subprocess_safe(cmd, timeout=60)
 
                     for line in reversed(stdout.splitlines()):
@@ -2589,12 +2798,14 @@ class Api:
             "mensaje": res.get("mensaje", "Modelo no encontrado"),
             "consultas_restantes": res.get("consultas_restantes", 0)
         }
-    def consultar_modelo(self, imei):
+    def consultar_modelo(self, imei, headless: bool = True):
         try:
             import json as _json
             _INVALID_MODELS = {"error", "no encontrado", "desconocido", "null", "undefined", ""}
 
-            cmd = script_command("ConsultarModelo.py") + [str(imei), "--headless"]
+            cmd = script_command("ConsultarModelo.py") + [str(imei)]
+            if headless:
+                cmd.append("--headless")
             proc, stdout, _ = run_subprocess_safe(cmd, timeout=60)
 
             for line in reversed(stdout.splitlines()):
@@ -2803,7 +3014,7 @@ class Api:
                     "• Recuerda configurar Blanco y Negro y Doble cara en tu impresora por defecto."
                 )
             elif sys.platform == "darwin":
-                # AppleScript: abrir en Preview y disparar ⌘P para el diálogo nativo
+                # AppleScript: abrir en Preview y disparar Cmd+P para el diálogo nativo
                 script = f'''
 set pdfPath to POSIX file "{tmp_path}"
 tell application "Preview"
@@ -2981,12 +3192,12 @@ end tell
                                 c.drawImage(foto_cc, x, y, width=draw_w, height=draw_h)
                                 c.save()
             except Exception as e_cc:
-                print(f"⚠️ No se pudo obtener la CC del encargado: {e_cc}")
+                print(f"[WARN] No se pudo obtener la CC del encargado: {e_cc}")
 
             if ruta_cc and os.path.exists(ruta_cc):
                 archivos.append(ruta_cc)
             else:
-                print(f"ℹ️ CC del encargado no disponible, se omite del PDF de desbloqueo ETB.")
+                print(f"[INFO] CC del encargado no disponible, se omite del PDF de desbloqueo ETB.")
 
             if faltantes:
                 return {"status": "error", "mensaje": f"Faltan archivos: {', '.join(faltantes)}"}
@@ -3010,7 +3221,7 @@ end tell
                     'fecha_declaracion_generada': fecha_gen
                 }).eq('imei', str(imei).strip()).execute())
             except Exception as e_up:
-                print(f"⚠️ Error actualizando declaración ETB en registros: {e_up}")
+                print(f"[WARN] Error actualizando declaración ETB en registros: {e_up}")
 
             abrir_archivo(output)
             return {
@@ -3219,9 +3430,9 @@ end tell
                         can.drawImage(firma_path, dst_x, dst_y, width=dst_w, height=dst_h,
                                       preserveAspectRatio=True, mask='auto')
                         es_imagen = True
-                        print(f"[FIRMA] ✅ Imagen insertada en overlay: {firma_path}")
+                        print(f"[FIRMA] [OK] Imagen insertada en overlay: {firma_path}")
                     except Exception as fe:
-                        print(f"[FIRMA] ⚠️ No se pudo insertar imagen de firma: {fe}")
+                        print(f"[FIRMA] [WARN] No se pudo insertar imagen de firma: {fe}")
 
             can.save()
             packet.seek(0)
@@ -3245,13 +3456,13 @@ end tell
                             firma_copy.add_transformation(Transformation().scale(scale, scale).translate(tx, ty))
                             firma_copy.mediabox = copy.deepcopy(writer.pages[0].mediabox)
                             writer.pages[0].merge_page(firma_copy)
-                            print(f"[FIRMA] ✅ PDF de firma insertado: {firma_path}")
+                            print(f"[FIRMA] [OK] PDF de firma insertado: {firma_path}")
                         else:
-                            print(f"[FIRMA] ⚠️ Archivo PDF de firma sin páginas: {firma_path}")
+                            print(f"[FIRMA] [WARN] Archivo PDF de firma sin páginas: {firma_path}")
                     except Exception as fe:
-                        print(f"[FIRMA] ⚠️ No se pudo insertar PDF de firma: {fe}")
+                        print(f"[FIRMA] [WARN] No se pudo insertar PDF de firma: {fe}")
             elif not firma_path:
-                print("[FIRMA] ⚠️ Sin firma para este encargado — declaración generada sin firma.")
+                print("[FIRMA] [WARN] Sin firma para este encargado — declaración generada sin firma.")
 
             out_dir = os.path.join(files_dir, "declaraciones_generadas")
             os.makedirs(out_dir, exist_ok=True)
@@ -3270,7 +3481,7 @@ end tell
                 "status": "success",
                 "ruta": output_path,
                 "fecha": fecha_gen,
-                "mensaje": "Declaración WOM generada ✓"
+                "mensaje": "Declaración WOM generada"
             }
         except ImportError:
             return {"status": "error", "mensaje": "Instala pypdf: pip install pypdf"}
@@ -3292,7 +3503,7 @@ end tell
                 if old_res.data:
                     old_reg = old_res.data[0]
             except Exception as he:
-                print(f"⚠️ [Hook] Error fetching old record in actualizar_imei: {he}")
+                print(f"[WARN] [Hook] Error fetching old record in actualizar_imei: {he}")
 
             trigger_fallo = False
             try:
@@ -3302,9 +3513,9 @@ end tell
                 }).eq('imei', imei).execute()
             except Exception as ue:
                 err_str = str(ue)
-                print(f"⚠️ [Hook] Advertencia al actualizar BD en actualizar_imei: {err_str}")
+                print(f"[WARN] [Hook] Advertencia al actualizar BD en actualizar_imei: {err_str}")
                 if "schema \"net\" does not exist" in err_str or "3F000" in err_str:
-                    print("💡 [Trigger BD] Trigger pg_net falló — reintentando con REST directo...")
+                    print("[RETRY] [Trigger BD] Trigger pg_net falló — reintentando con REST directo...")
                     ok = _update_supabase_directo('registros', {'estado': estado, 'operador': operador}, imei)
                     if not ok:
                         return {"status": "error", "mensaje": "No se pudo guardar el estado en la base de datos (trigger pg_net no disponible)."}
@@ -3324,7 +3535,7 @@ end tell
                 if old_reg:
                     self._crear_notificacion_si_cambia_a_exitoso(imei, old_reg, new_reg)
             except Exception as he:
-                print(f"⚠️ [Hook] Error checking transition in actualizar_imei: {he}")
+                print(f"[WARN] [Hook] Error checking transition in actualizar_imei: {he}")
 
             return {"status": "success", "estado": estado, "operador": operador}
         except Exception as e:
@@ -3396,7 +3607,7 @@ end tell
                 data = [r for r in data if not self._is_hidden_client(r.get('cliente'), hidden_ids, hidden_names)]
             return data
         except Exception as e:
-            print(f"❌ [API] Error en obtener_papelera: {e}")
+            print(f"[ERROR] [API] Error en obtener_papelera: {e}")
             return []
 
     def eliminar_registro(self, imei):
@@ -3503,7 +3714,7 @@ end tell
 
     # ── BLACKLIST GSMA ─────────────────────────────────────────────
 
-    def consultar_blacklist(self, imei, con_pantallazo=False):
+    def consultar_blacklist(self, imei, con_pantallazo=False, headless: bool = True):
         """
         Ejecuta blacklist.py como subprocess (iunlocker.com GSMA Blacklist).
         Guarda el estado en Supabase columna 'blacklist' ("Blacklist" | "clean").
@@ -3514,6 +3725,8 @@ end tell
             cmd = script_command("blacklist.py") + [str(imei)]
             if con_pantallazo:
                 cmd.append("--screenshot")
+            if not headless:
+                cmd.append("--visible")
 
             proc, stdout, _ = run_subprocess_safe(cmd, timeout=90)
 
@@ -3536,9 +3749,9 @@ end tell
                 # Guardar en Supabase
                 try:
                     supabase.table('registros').update({'blacklist': valor_bd}).eq('imei', str(imei)).execute()
-                    print(f"✅ [Blacklist] IMEI {imei} → blacklist={valor_bd} guardado en Supabase.")
+                    print(f"[OK] [Blacklist] IMEI {imei} → blacklist={valor_bd} guardado en Supabase.")
                 except Exception as se:
-                    print(f"⚠️ [Blacklist] Error al guardar en Supabase: {se}")
+                    print(f"[WARN] [Blacklist] Error al guardar en Supabase: {se}")
 
             return data
         except subprocess.TimeoutExpired:
@@ -3562,6 +3775,24 @@ end tell
                     return _json.loads(line)
 
             return self._leer_estado_cupos_blacklist_directo()
+        except Exception as e:
+            return {"status": "error", "mensaje": str(e), "consultas_restantes": 0}
+
+    def validar_web_cupos_blacklist(self):
+        """
+        Valida en vivo contra iunlocker.com si el sitio ya permite consultas de Blacklist.
+        Si la página sigue bloqueada, no reinicia el conteo y retorna tiempo restante real.
+        Si la página está lista, reinicia los 5 cupos.
+        """
+        import json as _json
+        try:
+            cmd = script_command("blacklist.py") + ["--validar-web"]
+            proc, stdout, _ = run_subprocess_safe(cmd, timeout=30)
+            for line in reversed(stdout.splitlines()):
+                line = line.strip()
+                if line.startswith("{"):
+                    return _json.loads(line)
+            return self.obtener_estado_cupos_blacklist()
         except Exception as e:
             return {"status": "error", "mensaje": str(e), "consultas_restantes": 0}
 
@@ -3697,7 +3928,7 @@ end tell
                         if cnom:
                             hidden_names.add(cnom)
         except Exception as e:
-            print(f"⚠️ [RBAC] Error obteniendo clientes ocultos: {e}")
+            print(f"[WARN] [RBAC] Error obteniendo clientes ocultos: {e}")
         return hidden_ids, hidden_names
 
     def _is_hidden_client(self, cliente_val, hidden_ids, hidden_names):
@@ -3725,6 +3956,22 @@ end tell
                 return True
 
         return False
+
+    def _get_hidden_imeis(self):
+        """Devuelve un conjunto con todos los IMEIs pertenecientes a clientes ocultos."""
+        hidden_ids, hidden_names = self._get_hidden_client_identifiers()
+        hidden_imeis = set()
+        try:
+            res = safe_supabase(lambda: supabase.table('registros').select('imei, cliente').execute())
+            if res and res.data:
+                for r in res.data:
+                    c = r.get('cliente')
+                    im = str(r.get('imei') or '').strip()
+                    if im and self._is_hidden_client(c, hidden_ids, hidden_names):
+                        hidden_imeis.add(im)
+        except Exception as e:
+            print(f"[WARN] [RBAC] Error obteniendo IMEIs de clientes ocultos: {e}")
+        return hidden_imeis
 
     def _get_hidden_lines(self):
         """Devuelve un set con los números de líneas marcadas como ocultas."""
@@ -3763,7 +4010,7 @@ end tell
                 'valor': json.dumps(list_to_save)
             }).execute())
         except Exception as e:
-            print(f"⚠️ [Lineas Ocultas] Error guardando en configuracion: {e}")
+            print(f"[WARN] [Lineas Ocultas] Error guardando en configuracion: {e}")
 
         try:
             # Si la columna oculto existe, sincronizar
@@ -4112,7 +4359,7 @@ end tell
                 'INGRESO': ingreso_val
             }
             safe_supabase(lambda: supabase.table('FastReg').upsert(fast_payload).execute())
-            print(f"✅ [FastReg] Guardado exitosamente para IMEI {imei} ({operador})")
+            print(f"[OK] [FastReg] Guardado exitosamente para IMEI {imei} ({operador})")
 
             # Actualizar las_use en lineas
             if linea_num:
@@ -4126,7 +4373,7 @@ end tell
 
             return {"status": "success", "mensaje": "Guardado en FastReg correctamente", "data": fast_payload}
         except Exception as e:
-            print(f"❌ [FastReg] Error al guardar_en_fastreg: {e}")
+            print(f"[ERROR] [FastReg] Error al guardar_en_fastreg: {e}")
             return {"status": "error", "mensaje": str(e)}
 
     def obtener_fastreg(self):
@@ -4190,10 +4437,10 @@ end tell
             }
             safe_supabase(lambda: supabase.table('papelera').upsert(papelera_data).execute())
             safe_supabase(lambda: supabase.table('FastReg').delete().eq('IMEI', imei).execute())
-            print(f"🗑️  [FastReg] IMEI {imei} movido a papelera")
+            print(f"[TRASH] [FastReg] IMEI {imei} movido a papelera")
             return {"status": "success"}
         except Exception as e:
-            print(f"❌ [FastReg] Error en eliminar_fastreg: {e}")
+            print(f"[ERROR] [FastReg] Error en eliminar_fastreg: {e}")
             return {"status": "error", "mensaje": str(e)}
 
 
@@ -4298,9 +4545,9 @@ end tell
                         from datetime import datetime
                         ahora_iso = datetime.now().astimezone().isoformat()
                         supabase.table('lineas').update({'las_use': ahora_iso}).eq('numero', linea_num).execute()
-                        print(f"✅ [FastReg] updated las_use for line {linea_num} to {ahora_iso}")
+                        print(f"[OK] [FastReg] updated las_use for line {linea_num} to {ahora_iso}")
                     except Exception as le:
-                        print(f"⚠️ [FastReg] Error updating las_use for line {linea_num}: {le}")
+                        print(f"[WARN] [FastReg] Error updating las_use for line {linea_num}: {le}")
 
                 ret = {"status": "success", "mensaje": "Procesado correctamente"}
                 if pdf_ruta:
@@ -4341,7 +4588,7 @@ end tell
                 try:
                     os.makedirs(output_dir, exist_ok=True)
                 except Exception as fe:
-                    print(f"⚠️ Error al crear carpeta de resultados masivos: {fe}")
+                    print(f"[WARN] Error al crear carpeta de resultados masivos: {fe}")
 
                 lineas_usadas_set = set()
                 batch_data = []
@@ -4531,9 +4778,9 @@ end tell
                         # Notificar resultado individual al frontend
                         try:
                             if self.window:
-                                icon = "✓" if es_exito else "✗"
                                 toast_type = "success" if es_exito else "warning"
-                                self.window.evaluate_js(f"showToast('{icon} ({idx+1}/{total}) IMEI {imei_val}: {estado_final}', '{toast_type}');")
+                                toast_type = "success" if es_exito else "warning"
+                                self.window.evaluate_js(f"showToast('({idx+1}/{total}) IMEI {imei_val}: {estado_final}', '{toast_type}');")
                                 self.window.evaluate_js("if (typeof window.recibirActualizacionFastReg === 'function') { window.recibirActualizacionFastReg(); }")
                         except Exception:
                             pass
@@ -4543,7 +4790,7 @@ end tell
                     # Fin de todo el lote
                     try:
                         if self.window:
-                            self.window.evaluate_js(f"showToast(' Lote Masivo Completado: {exitos} exitosos, {fallos} fallidos.', 'success');")
+                            self.window.evaluate_js(f"showToast('Lote Masivo Completado: {exitos} exitosos, {fallos} fallidos.', 'success');")
                             self.window.evaluate_js("if (typeof cargarDatosFastReg === 'function') { cargarDatosFastReg(); }")
                             self.window.evaluate_js("if (typeof renderizarTabla === 'function') { renderizarTabla(); }")
                     except Exception:

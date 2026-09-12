@@ -8,6 +8,10 @@
 let _ckScreenshotActual = null;
 let _ckCuposTimer = null;
 
+function ckIsHeadless() {
+    return ((localStorage.getItem('imei-headless') || '1') === '1');
+}
+
 /* ─── ABRIR / CERRAR ─── */
 async function abrirCheck() {
     document.getElementById('checkOverlay').classList.add('active');
@@ -57,15 +61,9 @@ function ckLimpiarResultado() {
         if (iconSvg) iconSvg.style.color = '#a78bfa';
     }
 
-    // Hide cupos indicator
-    const cuposCont = document.getElementById('ckCuposContainer');
-    if (cuposCont) {
-        cuposCont.style.display = 'none';
-    }
-    const blCuposCont = document.getElementById('ckBlacklistCuposContainer');
-    if (blCuposCont) {
-        blCuposCont.style.display = 'none';
-    }
+    // NO ocultar los contenedores de cupos al limpiar: se mantienen visibles
+    // para que el usuario siempre vea el indicador de cupos disponibles.
+    // Los cupos se actualizan por ckActualizarCupos() / ckActualizarCuposBlacklist().
 }
 
 /* ─── VALIDAR IMEI ─── */
@@ -93,7 +91,7 @@ function ckMostrarResultado({ iconClass, label, value, meta = [], loading = fals
     if (loading) {
         icon.innerHTML = `<div class="ck-spinner"></div>`;
     } else {
-        icon.innerHTML = value.startsWith('❌') || iconClass.includes('error')
+        icon.innerHTML = (value && (value.toLowerCase().includes('error') || value.toLowerCase().includes('fallido') || value.toLowerCase().includes('rechazado') || value.toLowerCase().includes('no encontrado'))) || iconClass.includes('error')
             ? `<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>`
             : iconClass.includes('colombia')
                 ? `<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>`
@@ -149,7 +147,7 @@ async function ckConsultarModeloPro() {
     showToastLoading('Consultando modelo en iunlocker.com...');
 
     try {
-        const res = await window.pywebview.api.consultar_modelo_pro(imei, true);
+        const res = await window.pywebview.api.consultar_modelo_pro(imei, true, ckIsHeadless());
         hideToastLoading();
 
         if (res.status === 'success') {
@@ -219,7 +217,7 @@ async function ckConsultarModeloEstandar() {
     showToastLoading('Consultando modelo estándar...');
 
     try {
-        const res = await window.pywebview.api.consultar_modelo_estandar(imei);
+        const res = await window.pywebview.api.consultar_modelo_estandar(imei, ckIsHeadless());
         hideToastLoading();
 
         if (res.status === 'success') {
@@ -292,7 +290,7 @@ async function ckConsultarImeiColombia() {
     showToastLoading('Consultando estado en IMEI Colombia...');
 
     try {
-        const res = await window.pywebview.api.consultar_imei_colombia_con_pantallazo(imei);
+        const res = await window.pywebview.api.consultar_imei_colombia_con_pantallazo(imei, ckIsHeadless());
         hideToastLoading();
 
         if (res.status === 'success') {
@@ -347,14 +345,14 @@ async function ckConsultarBlacklist() {
     showToastLoading('Consultando Blacklist GSMA en iunlocker.com...');
 
     try {
-        const res = await window.pywebview.api.consultar_blacklist(imei);
+        const res = await window.pywebview.api.consultar_blacklist(imei, false, ckIsHeadless());
         hideToastLoading();
 
         if (res.status === 'success') {
             const enBlacklist = res.en_blacklist || false;
             ckMostrarResultado({
                 iconClass: enBlacklist ? 'ck-icon-error' : 'ck-icon-blacklist',
-                label: enBlacklist ? '⚠️ IMEI en Blacklist GSMA' : '✅ IMEI Limpio (Clean)',
+                label: enBlacklist ? 'IMEI en Blacklist GSMA' : 'IMEI Limpio (Clean)',
                 value: res.mensaje || (enBlacklist ? 'Este IMEI está reportado en lista negra' : 'No se encontró en lista negra GSMA'),
                 meta: [
                     { label: 'IMEI', value: imei },
@@ -368,7 +366,19 @@ async function ckConsultarBlacklist() {
                 ckMostrarScreenshot(res.screenshot_path);
             }
 
-            showToast(enBlacklist ? '⚠️ IMEI en Blacklist' : '✅ IMEI limpio', enBlacklist ? 'error' : 'success');
+            showToast(enBlacklist ? 'IMEI en Blacklist GSMA' : 'IMEI Limpio (Clean)', enBlacklist ? 'error' : 'success');
+
+        } else if (res.status === 'sin_cupos' || res.status === 'limite_web') {
+            ckMostrarResultado({
+                iconClass: 'ck-icon-error',
+                label: res.status === 'sin_cupos' ? 'Sin cupos Blacklist' : 'Límite del sitio alcanzado',
+                value: res.mensaje || 'Límite del sitio alcanzado',
+                meta: [
+                    { label: 'Disponible en', value: `${res.horas}h ${res.minutos}m` },
+                    { label: 'Cupos', value: '0 / 5' }
+                ]
+            });
+            showToast(res.mensaje || 'Límite del sitio alcanzado', 'warning');
 
         } else {
             ckMostrarResultado({
@@ -557,12 +567,12 @@ async function consultarModeloFila(imei, originalIndex) {
 
     try {
         // 1. Ejecutar ConsultarModelo (Estándar) primero
-        let res = await window.pywebview.api.consultar_modelo(imei);
+        let res = await window.pywebview.api.consultar_modelo(imei, ckIsHeadless());
 
         // 2. Si la respuesta es Error o falla, ejecutar automáticamente ConsultarModeloPro
         if (!res || res.status !== 'success' || !res.modelo) {
             showToast('Modelo Estándar falló. Reintentando con Modo Pro...', 'warning');
-            res = await window.pywebview.api.consultar_modelo_pro(imei, false);
+            res = await window.pywebview.api.consultar_modelo_pro(imei, false, ckIsHeadless());
         }
 
         if (res && res.status === 'success' && res.modelo) {

@@ -64,6 +64,8 @@ def crear_driver(headless: bool = False):
     options = webdriver.ChromeOptions()
     if headless:
         options.add_argument("--headless=new")
+    else:
+        options.add_argument("--start-maximized")
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
@@ -81,6 +83,17 @@ def crear_driver(headless: bool = False):
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
         "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
     })
+    if not headless:
+        try:
+            driver.maximize_window()
+        except Exception:
+            pass
+        if sys.platform == "darwin":
+            try:
+                import subprocess
+                subprocess.run(["osascript", "-e", 'tell application "Google Chrome" to activate'], check=False)
+            except Exception:
+                pass
     return driver, WebDriverWait(driver, 10)
 
 def consultar_modelos(imeis, headless: bool = False):

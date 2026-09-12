@@ -57,13 +57,14 @@ ruta_tesseract = next((r for r in posibles_rutas if os.path.exists(r)), shutil.w
 if ruta_tesseract:
     pytesseract.pytesseract.tesseract_cmd = ruta_tesseract
 else:
-    print("⚠️ AVISO: Tesseract no encontrado en rutas estándar. Si usas consultas de IMEI, instálalo en Windows (https://github.com/UB-Mannheim/tesseract/wiki) o en Mac ('brew install tesseract').")
+    print("[WARN] AVISO: Tesseract no encontrado en rutas estándar. Si usas consultas de IMEI, instálalo en Windows (https://github.com/UB-Mannheim/tesseract/wiki) o en Mac ('brew install tesseract').")
 def generar_acronimo(texto):
     if not texto: return "DESC" 
     palabras = str(texto).split()
     return "".join([p[0].upper() for p in palabras if p])
 class IMEIScraper:
     def __init__(self, headless: bool = False):
+        self.headless = headless
         self.driver = self._init_driver(headless=headless)
         self.wait = WebDriverWait(self.driver, 10)
         
@@ -75,10 +76,24 @@ class IMEIScraper:
         options = webdriver.ChromeOptions()
         if headless:
             options.add_argument("--headless=new")
+        else:
+            options.add_argument("--start-maximized")
         options.add_argument("--disable-blink-features=AutomationControlled")
         options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36")
         options.add_argument("--window-size=1920,1080")
-        return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+        if not headless:
+            try:
+                driver.maximize_window()
+            except Exception:
+                pass
+            if sys.platform == "darwin":
+                try:
+                    import subprocess
+                    subprocess.run(["osascript", "-e", 'tell application "Google Chrome" to activate'], check=False)
+                except Exception:
+                    pass
+        return driver
     def close(self):
         if self.driver:
             self.driver.quit()
@@ -116,6 +131,12 @@ class IMEIScraper:
     def consultar_y_capturar(self, imei, ruta_guardado):
         max_retries = 7
         self.driver.get(URL_CONSULTA)
+        if not self.headless and sys.platform == "darwin":
+            try:
+                import subprocess
+                subprocess.run(["osascript", "-e", 'tell application "Google Chrome" to activate'], check=False)
+            except Exception:
+                pass
         try:
             input_imei = self.wait.until(EC.presence_of_element_located((By.XPATH, '/html/body/table[1]/tbody/tr[3]/td[2]/form/table/tbody/tr[3]/td[2]/font/input')))
             input_imei.clear()
@@ -186,7 +207,7 @@ def main():
         os.makedirs(pantallazos_dir, exist_ok=True)
         
     except Exception as e:
-        print(f"❌ Error: No se pudo conectar a Excel. Asegúrate de tenerlo abierto. Detalles: {e}")
+        print(f"[ERROR] Error: No se pudo conectar a Excel. Asegúrate de tenerlo abierto. Detalles: {e}")
         return
     celda_activa = app.selection
     fila = celda_activa.row
@@ -196,25 +217,25 @@ def main():
     modelo_val = sheet.range((fila, COLUMNA_MODELO)).value
     
     if not imei_val:
-        print("❌ Error: La celda del IMEI está vacía.")
+        print("[ERROR] Error: La celda del IMEI está vacía.")
         return
         
     imei_str = str(int(imei_val)) if isinstance(imei_val, (int, float)) else str(imei_val).strip()
     acronimo = generar_acronimo(modelo_val)
     nombre_archivo = f"{imei_str}_{acronimo}.png"
     ruta_guardado = os.path.join(pantallazos_dir, nombre_archivo)
-    print(f"🔎 Procesando IMEI: {imei_str} | Modelo: {modelo_val} ({acronimo})")
-    print(f"📂 El pantallazo se guardará en: {ruta_guardado}")
+    print(f"[PROCESO] Procesando IMEI: {imei_str} | Modelo: {modelo_val} ({acronimo})")
+    print(f"[RUTA] El pantallazo se guardará en: {ruta_guardado}")
     scraper = IMEIScraper()
     
     try:
         exito = scraper.consultar_y_capturar(imei_str, ruta_guardado)
         if exito:
-            print(f"✅ Pantallazo guardado exitosamente: {nombre_archivo}")
+            print(f"[OK] Pantallazo guardado exitosamente: {nombre_archivo}")
         else:
-            print(f"❌ No se pudo capturar el pantallazo para el IMEI {imei_str}")
+            print(f"[ERROR] No se pudo capturar el pantallazo para el IMEI {imei_str}")
     except Exception as e:
-        print(f"❌ Error en ejecución: {e}")
+        print(f"[ERROR] Error en ejecución: {e}")
     finally:
         scraper.close()
             

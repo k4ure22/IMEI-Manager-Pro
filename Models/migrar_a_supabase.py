@@ -8,9 +8,9 @@ try:
     import certifi
     context = ssl.create_default_context(cafile=certifi.where())
     ssl._create_default_https_context = lambda: context
-    print("✅ [SSL] Contexto SSL configurado de forma segura con certifi.")
+    print("[OK] [SSL] Contexto SSL configurado de forma segura con certifi.")
 except Exception as e:
-    print(f"⚠️ [SSL] No se pudo configurar certifi ({e}), usando bypass de compatibilidad.")
+    print(f"[WARN] [SSL] No se pudo configurar certifi ({e}), usando bypass de compatibilidad.")
     ssl._create_default_https_context = ssl._create_unverified_context
 
 from supabase import create_client
@@ -26,7 +26,7 @@ DB_PATH = os.path.join(MODELS_DIR, "imei_database.db")
 
 def migrar():
     if not os.path.exists(DB_PATH):
-        print(f"❌ No se encontró la base de datos local en {DB_PATH}")
+        print(f"[ERROR] No se encontró la base de datos local en {DB_PATH}")
         return
 
     conn = sqlite3.connect(DB_PATH)
@@ -40,9 +40,9 @@ def migrar():
         for row in cursor.fetchall():
             cliente = dict(row)
             supabase.table("clientes").upsert(cliente).execute()
-        print("✅ Clientes migrados.")
+        print("[OK] Clientes migrados.")
     except Exception as e:
-        print(f"❌ Error migrando clientes: {e}")
+        print(f"[ERROR] Error migrando clientes: {e}")
     
     # 2. Migrar Encargados
     print("Migrando encargados...")
@@ -51,9 +51,9 @@ def migrar():
         for row in cursor.fetchall():
             encargado = dict(row)
             supabase.table("encargados").upsert(encargado).execute()
-        print("✅ Encargados migrados.")
+        print("[OK] Encargados migrados.")
     except Exception as e:
-        print(f"❌ Error migrando encargados: {e}")
+        print(f"[ERROR] Error migrando encargados: {e}")
 
     # 3. Migrar Registros
     print("Migrando registros...")
@@ -63,9 +63,9 @@ def migrar():
             registro = dict(row)
             # Manejar valores vacíos
             supabase.table("registros").upsert(registro).execute()
-        print("✅ Registros migrados.")
+        print("[OK] Registros migrados.")
     except Exception as e:
-        print(f"❌ Error migrando registros: {e}")
+        print(f"[ERROR] Error migrando registros: {e}")
 
     # 4. Migrar Papelera
     print("Migrando registros de papelera...")
@@ -74,9 +74,9 @@ def migrar():
         for row in cursor.fetchall():
             papelera = dict(row)
             supabase.table("papelera").upsert(papelera).execute()
-        print("✅ Papelera migrada.")
+        print("[OK] Papelera migrada.")
     except Exception as e:
-        print(f"❌ Error migrando papelera: {e}")
+        print(f"[ERROR] Error migrando papelera: {e}")
 
     # 5. Migrar Usuarios
     print("Migrando usuarios...")
@@ -85,9 +85,9 @@ def migrar():
         for row in cursor.fetchall():
             user = dict(row)
             supabase.table("usuarios").upsert(user).execute()
-        print("✅ Usuarios migrados.")
+        print("[OK] Usuarios migrados.")
     except Exception as e:
-        print(f"❌ Error migrando usuarios: {e}")
+        print(f"[ERROR] Error migrando usuarios: {e}")
 
     # 6. Migrar Líneas (si existen localmente)
     print("Migrando líneas...")
@@ -106,11 +106,11 @@ def migrar():
                 "encargado": linea.get("encargado") or ""
             }
             supabase.table("lineas").upsert(data_linea).execute()
-        print("✅ Líneas migradas.")
+        print("[OK] Líneas migradas.")
     except sqlite3.OperationalError:
-        print("ℹ️ No existe tabla local 'lineas' o no contiene registros.")
+        print("[INFO] No existe tabla local 'lineas' o no contiene registros.")
     except Exception as e:
-        print(f"❌ Error migrando líneas: {e}")
+        print(f"[ERROR] Error migrando líneas: {e}")
 
     # 7. Migrar Configuración
     print("Migrando configuración...")
@@ -119,13 +119,13 @@ def migrar():
         for row in cursor.fetchall():
             config = dict(row)
             supabase.table("configuracion").upsert(config).execute()
-        print("✅ Configuración migrada.")
+        print("[OK] Configuración migrada.")
     except sqlite3.OperationalError:
-        print("ℹ️ No existe tabla local 'configuracion' o no contiene registros.")
+        print("[INFO] No existe tabla local 'configuracion' o no contiene registros.")
     except Exception as e:
-        print(f"❌ Error migrando configuración: {e}")
+        print(f"[ERROR] Error migrando configuración: {e}")
 
-    print("🎉 ¡Migración completa terminada con éxito!")
+    print("[SUCCESS] ¡Migración completa terminada con éxito!")
     conn.close()
 
 if __name__ == "__main__":

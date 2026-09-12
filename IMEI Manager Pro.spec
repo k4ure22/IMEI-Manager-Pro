@@ -81,7 +81,10 @@ hidden_imports = [
     'storage3',
     'openpyxl',
     'certifi',
-    'xlwings'
+    'xlwings',
+    # unittest es requerido por pyparsing (dependencia transitiva de supabase/storage3)
+    'unittest',
+    'unittest.mock',
 ]
 
 chromedriver_bin = 'chromedriver'
@@ -97,7 +100,7 @@ a = Analysis(
     hiddenimports=hidden_imports,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=['rthook_pyiceberg.py'],
     excludes=[
         'pandas',
         'matplotlib',
@@ -105,7 +108,10 @@ a = Analysis(
         'torch',
         'IPython',
         'pytest',
-        'unittest',
+        # pyiceberg: paquete de Data Lake arrastrado por storage3, no se usa en esta app
+        'pyiceberg',
+        'pyiceberg.catalog',
+        'pyiceberg.table',
         'tkinter',
         'PyQt5',
         'PySide2',

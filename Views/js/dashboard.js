@@ -1,20 +1,93 @@
 /* ============ ESTADO GLOBAL ============ */
 /* ============ ICONOS SVG ============ */
+/* ============ ICONOS SVG ============ */
 const ICONS = {
-    success: '<svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>',
-    error: '<svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>',
-    warning: '<svg class="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>',
-    loading: '<svg class="w-5 h-5 animate-spin text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>',
-    copy: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>',
-    trash: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>',
-    save: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>',
-    unlocked: '<svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>',
-    locked: '<svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>',
-    device: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>',
-    camera: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>',
-    file: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>',
-    bell: '<svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>'
+    success: '<svg class="w-5 h-5 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M5 13l4 4L19 7"></path></svg>',
+    error: '<svg class="w-5 h-5 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M6 18L18 6M6 6l12 12"></path></svg>',
+    warning: '<svg class="w-5 h-5 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>',
+    info: '<svg class="w-5 h-5 text-cyan-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>',
+    loading: '<svg class="w-5 h-5 animate-spin text-cyan-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>',
+    copy: '<svg class="w-5 h-5 text-cyan-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>',
+    trash: '<svg class="w-5 h-5 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>',
+    save: '<svg class="w-5 h-5 text-sky-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>',
+    unlocked: '<svg class="w-5 h-5 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>',
+    locked: '<svg class="w-5 h-5 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>',
+    device: '<svg class="w-5 h-5 text-cyan-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>',
+    camera: '<svg class="w-5 h-5 text-cyan-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>',
+    file: '<svg class="w-5 h-5 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>',
+    bell: '<svg class="w-5 h-5 text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>',
+    search: '<svg class="w-5 h-5 text-cyan-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>',
+    mail: '<svg class="w-5 h-5 text-pink-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>',
+    user: '<svg class="w-5 h-5 text-cyan-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>',
+    network: '<svg class="w-5 h-5 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"></path></svg>',
+    sim: '<svg class="w-5 h-5 text-indigo-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V9l-6-6H9zM9 9h6v6H9V9z"></path></svg>',
+    refresh: '<svg class="w-5 h-5 text-cyan-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>'
 };
+
+function resolverIconoToast(message, requestedIcon) {
+    if (requestedIcon && ICONS[requestedIcon]) {
+        return ICONS[requestedIcon];
+    }
+    const emojiMap = {
+        '✅': 'success', '✔️': 'success', '✓': 'success',
+        '❌': 'error', '✖': 'error', '✕': 'error',
+        '⚠️': 'warning', '❗': 'warning', '⚡': 'warning',
+        'ℹ️': 'info', 'ℹ': 'info',
+        '📋': 'copy', '📄': 'file', '💾': 'save',
+        '🗑️': 'trash', '🗑': 'trash',
+        '🔓': 'unlocked', '🔒': 'locked', '🔑': 'locked',
+        '📱': 'device', '📷': 'camera', '🔔': 'bell',
+        '✉️': 'mail', '✉': 'mail', '🔍': 'search',
+        '🔎': 'search', '🔄': 'refresh', '📡': 'network'
+    };
+    if (requestedIcon && emojiMap[requestedIcon]) {
+        return ICONS[emojiMap[requestedIcon]];
+    }
+
+    const msg = (typeof message === 'string' ? message : '').toLowerCase();
+    if (/copiad|portapapeles|copiar/i.test(msg)) return ICONS.copy;
+    if (/error|falló|fallido|no se pudo|incorrect|inválid|rechazad/i.test(msg)) return ICONS.error;
+    if (/advertencia|atención|cuidado|requerid|completa|sin cupos|falta/i.test(msg)) return ICONS.warning;
+    if (/eliminad|borrad|descartad|removid|papelera/i.test(msg)) return ICONS.trash;
+    if (/guardad|guardar|salvad|actualizad/i.test(msg)) return ICONS.save;
+    if (/pin|clave|contraseña|bloqueo|bloquead|acceso/i.test(msg)) return ICONS.locked;
+    if (/libre|desbloque/i.test(msg)) return ICONS.unlocked;
+    if (/consultando|buscando|analizando|verificando/i.test(msg)) return ICONS.search;
+    if (/correo|email|enviar/i.test(msg)) return ICONS.mail;
+    if (/foto|pantallazo|captura|imagen/i.test(msg)) return ICONS.camera;
+    if (/pdf|archivo|documento|declaraci[oó]n|reporte/i.test(msg)) return ICONS.file;
+    if (/l[ií]nea|sim|etb|wom|claro|tigo|movistar/i.test(msg)) return ICONS.sim;
+    if (/personal|encargado|cliente|usuario|perfil/i.test(msg)) return ICONS.user;
+    if (/wifi|red|conexi[oó]n|internet|servidor|api/i.test(msg)) return ICONS.network;
+    if (/notificaci[oó]n|alerta|aviso/i.test(msg)) return ICONS.bell;
+
+    return ICONS.success;
+}
+
+function aplicarMarqueeSiDesborda(msgElement, wrapperElement) {
+    if (!msgElement || !wrapperElement) return 0;
+    msgElement.classList.remove('toast-marquee');
+    msgElement.style.removeProperty('--toast-marquee-dist');
+    msgElement.style.removeProperty('--toast-marquee-duration');
+    wrapperElement.classList.remove('has-overflow');
+
+    void msgElement.offsetWidth;
+
+    const textWidth = msgElement.scrollWidth;
+    const containerWidth = wrapperElement.clientWidth;
+
+    if (textWidth > containerWidth + 6) {
+        const overflowDistance = Math.round(textWidth - containerWidth + 14);
+        const durationSeconds = Math.max(3.5, Math.round((overflowDistance / 24) * 10) / 10);
+
+        msgElement.style.setProperty('--toast-marquee-dist', `-${overflowDistance}px`);
+        msgElement.style.setProperty('--toast-marquee-duration', `${durationSeconds}s`);
+        msgElement.classList.add('toast-marquee');
+        wrapperElement.classList.add('has-overflow');
+        return overflowDistance;
+    }
+    return 0;
+}
 
 /* ============ UTILIDADES ============ */
 function normalizePathForWeb(ruta) {
@@ -217,7 +290,9 @@ async function initApp() {
             actualizarVisualizacionEstadoBD(currentDbStatus);
             if (currentDbStatus === 'paused') {
                 hideSplash();
-                mostrarPantallaSleep();
+                // No-admin: mostrar pantalla de mantenimiento y no continuar
+                // Admin: permitir continuar al login para que pueda reactivar
+                mostrarPantallaMantenimiento(stateRes.maintenance_until || '');
                 return;
             }
         }
@@ -277,12 +352,63 @@ function mostrarPantallaSesionRecordada(lastSession) {
     mostrarPantallaLogin();
 }
 
-function mostrarPantallaSleep() {
-    document.getElementById('authOverlay').classList.add('hidden');
-    document.getElementById('sleepOverlay').classList.remove('hidden');
+function mostrarPantallaSleep(maintenanceUntil) {
+    // La pantalla antigua sleepOverlay fue reemplazada por maintenanceOverlay.
+    // Esta función se mantiene por compatibilidad y redirige al nuevo diseño.
+    mostrarPantallaMantenimiento(maintenanceUntil || '');
 }
 
 function regresarAlLoginDesdeSleep() {
+    mostrarPantallaLogin();
+}
+
+/**
+ * Muestra la pantalla de mantenimiento para usuarios no-admin.
+ * @param {string} maintenanceUntil - Fecha/hora de reactivación (string, puede estar vacío)
+ */
+function mostrarPantallaMantenimiento(maintenanceUntil) {
+    const overlay = document.getElementById('maintenanceOverlay');
+    if (!overlay) return;
+
+    // Actualizar el bloque de fecha/hora si viene informado
+    const untilWrap = document.getElementById('maintUntil');
+    const untilVal = document.getElementById('maintUntilValue');
+    if (untilWrap && untilVal) {
+        if (maintenanceUntil && maintenanceUntil.trim() !== '') {
+            untilVal.textContent = maintenanceUntil.trim();
+            untilWrap.style.display = 'flex';
+        } else {
+            untilWrap.style.display = 'none';
+        }
+    }
+
+    // Forzar re-animación reiniciando el wrap
+    const wrap = document.getElementById('maintWrap');
+    if (wrap) {
+        wrap.style.animation = 'none';
+        void wrap.offsetWidth;
+        wrap.style.animation = '';
+    }
+
+    overlay.style.display = 'flex';
+    overlay.style.opacity = '1';
+    overlay.style.pointerEvents = 'auto';
+    // Asegurarse de que otras pantallas estén ocultas
+    document.getElementById('authOverlay')?.classList.add('hidden');
+    document.getElementById('sleepOverlay')?.classList.add('hidden');
+}
+
+function ocultarPantallaMantenimiento() {
+    const overlay = document.getElementById('maintenanceOverlay');
+    if (!overlay) return;
+    overlay.style.opacity = '0';
+    overlay.style.pointerEvents = 'none';
+    setTimeout(() => { overlay.style.display = 'none'; }, 560);
+}
+
+/** Botón de "Acceso Administrador" desde la pantalla de mantenimiento. Lleva al login. */
+function accederComoAdminDesdeMant() {
+    ocultarPantallaMantenimiento();
     mostrarPantallaLogin();
 }
 async function cargarClientesBase() {
@@ -310,7 +436,7 @@ function cambiarClienteDesdeDetalles() {
 // Polling robusto: espera hasta que window.pywebview.api esté disponible.
 (function waitForApi() {
     if (window.pywebview && window.pywebview.api && window.pywebview.api.obtener_registros) {
-        console.log("✅ [JS] API Totalmente Lista y Detectada");
+        console.log("[OK] [JS] API Totalmente Lista y Detectada");
         initApp();
         return;
     }
@@ -374,25 +500,23 @@ function posicionarToastLoadingDesdeDock() {
     const dockRect = dock.getBoundingClientRect();
     const toastWidth = t.offsetWidth || 310;
     const toastHeight = t.offsetHeight || 74;
-    const margenPantalla = 24;
 
     const y = Math.round(dockRect.top + (dockRect.height / 2) - (toastHeight / 2));
-    const attachedRight = Math.round(dockRect.left + 8);
-    const startX = Math.round(attachedRight - toastWidth);
-    const endX = Math.round(margenPantalla);
-    const linkWidth = Math.max(28, attachedRight - (endX + toastWidth) + 18);
+    // startX: oculto detrás del dock (el dock tiene z-index mayor, lo cubre)
+    const startX = Math.round(dockRect.left - toastWidth + 8);
+    // endX: borde izquierdo de pantalla con margen
+    const endX = 16;
 
     t.style.setProperty('--toast-y', `${y}px`);
     t.style.setProperty('--toast-x-start', `${startX}px`);
     t.style.setProperty('--toast-x-end', `${endX}px`);
-    t.style.setProperty('--toast-link-width', `${linkWidth}px`);
 }
 
 function showToastLoading(message) {
     const t = document.getElementById('toastLoading');
     if (!t) return;
-    const dock = document.querySelector('.mac-dock');
     const msgEl = document.getElementById('toastLoadingMessage');
+    const wrapperEl = msgEl?.parentElement;
     const barInner = document.getElementById('toastLoadingBarInner');
 
     // Ocultar botón flotante de notificaciones cuando sale el toast izquierdo
@@ -415,11 +539,8 @@ function showToastLoading(message) {
     posicionarToastLoadingDesdeDock();
     void t.offsetWidth;
 
-    if (dock) {
-        dock.classList.remove('toast-core-split-left');
-        dock.classList.remove('toast-core-merge-left');
-        void dock.offsetWidth;
-        dock.classList.add('toast-core-split-left');
+    if (msgEl && wrapperEl) {
+        aplicarMarqueeSiDesborda(msgEl, wrapperEl);
     }
 
     // Reiniciar animación de la barra
@@ -436,7 +557,6 @@ function showToastLoading(message) {
 function hideToastLoading() {
     const t = document.getElementById('toastLoading');
     if (!t) return;
-    const dock = document.querySelector('.mac-dock');
 
     // Restaurar botón flotante de notificaciones al ocultarse el toast izquierdo
     const btnNotif = document.getElementById('btnNotificaciones');
@@ -447,22 +567,15 @@ function hideToastLoading() {
     }
 
     t.setAttribute('data-toast-state', 'exit');
-    if (dock) {
-        dock.classList.remove('toast-core-split-left');
-        dock.classList.remove('toast-core-merge-left');
-        void dock.offsetWidth;
-        dock.classList.add('toast-core-merge-left');
-    }
 
     requestAnimationFrame(() => t.classList.remove('show'));
     toastLoadingHideTimer = setTimeout(() => {
         if (!t.classList.contains('show')) {
             t.removeAttribute('data-toast-state');
         }
-        dock?.classList.remove('toast-core-merge-left');
         const barInner = document.getElementById('toastLoadingBarInner');
         barInner?.classList.remove('anim');
-    }, 980);
+    }, 420);
 }
 
 function posicionarToastDesdeDock() {
@@ -472,21 +585,20 @@ function posicionarToastDesdeDock() {
 
     const dockRect = dock.getBoundingClientRect();
     const toastWidth = t.offsetWidth || 280;
-    const toastHeight = t.offsetHeight || 44;
-    const margenPantalla = 24;
+    const toastHeight = t.offsetHeight || 50;
 
     const y = Math.round(dockRect.top + (dockRect.height / 2) - (toastHeight / 2));
+    // startX: oculto detrás del dock (el dock tiene z-index mayor, lo cubre)
     const startX = Math.round(dockRect.right - 8);
-    const endX = Math.round(Math.max(startX + 20, window.innerWidth - toastWidth - margenPantalla));
-    const linkWidth = Math.max(28, endX - startX + 18);
+    // endX: borde derecho de pantalla con margen
+    const endX = window.innerWidth - toastWidth - 16;
 
     t.style.setProperty('--toast-y', `${y}px`);
     t.style.setProperty('--toast-x-start', `${startX}px`);
     t.style.setProperty('--toast-x-end', `${endX}px`);
-    t.style.setProperty('--toast-link-width', `${linkWidth}px`);
 }
 
-function showToast(message, icon = "✅") {
+function showToast(message, icon = "") {
     const t = document.getElementById('toast');
     const dock = document.querySelector('.mac-dock');
     if (!t) return;
@@ -506,29 +618,33 @@ function showToast(message, icon = "✅") {
 
     t.classList.remove('show');
     t.removeAttribute('data-toast-state');
-    document.getElementById('toastMessage').innerText = message;
-    document.getElementById('toastIcon').innerHTML = ICONS[icon] || ICONS.success;
+    
+    const msgEl = document.getElementById('toastMessage');
+    const iconEl = document.getElementById('toastIcon');
+    const wrapperEl = msgEl?.parentElement;
+
+    if (msgEl) msgEl.innerText = message;
+    if (iconEl) iconEl.innerHTML = resolverIconoToast(message, icon);
 
     posicionarToastDesdeDock();
     // Reinicia el timeline para que siempre salga desde el dock.
     void t.offsetWidth;
-    if (dock) {
-        dock.classList.remove('toast-core-split');
-        dock.classList.remove('toast-core-merge');
-        void dock.offsetWidth;
-        dock.classList.add('toast-core-split');
+
+    let overflowDist = 0;
+    if (msgEl && wrapperEl) {
+        overflowDist = aplicarMarqueeSiDesborda(msgEl, wrapperEl);
     }
+
     t.setAttribute('data-toast-state', 'enter');
     t.classList.add('show');
 
+    // Si el texto desborda, extender la duración visible para permitir leer todo el marquee
+    const duracionVisible = overflowDist > 0
+        ? Math.max(4200, 2000 + overflowDist * 40)
+        : 3000;
+
     toastHideTimer = setTimeout(() => {
         t.setAttribute('data-toast-state', 'exit');
-        if (dock) {
-            dock.classList.remove('toast-core-split');
-            dock.classList.remove('toast-core-merge');
-            void dock.offsetWidth;
-            dock.classList.add('toast-core-merge');
-        }
 
         // Restaurar contadores cuando el toast derecho empieza a guardarse
         const contadores = document.getElementById('ckDockIndicatorsContainer');
@@ -543,19 +659,19 @@ function showToast(message, icon = "✅") {
             if (!t.classList.contains('show')) {
                 t.removeAttribute('data-toast-state');
             }
-            dock?.classList.remove('toast-core-merge');
-        }, 980);
-    }, 3000);
+        }, 320);
+    }, duracionVisible);
 }
 
-
-
-document.getElementById('toast')?.addEventListener('transitionend', (e) => {
-    if (e.propertyName !== 'transform') return;
-    const t = e.currentTarget;
-    if (!t.classList.contains('show')) {
-        t.removeAttribute('data-toast-state');
-    }
+['toast', 'toastLoading'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('animationend', (e) => {
+        if (e.target !== el) return;
+        if (el.getAttribute('data-toast-state') === 'enter') {
+            el.removeAttribute('data-toast-state');
+        }
+    });
 });
 
 window.addEventListener('resize', () => {
@@ -630,7 +746,7 @@ function mostrarToastConfirmacionConsulta(toCheck) {
                 t.removeAttribute('data-toast-state');
             }
             dock?.classList.remove('toast-core-merge');
-        }, 980);
+        }, 420);
     }
 
     setTimeout(() => {
@@ -889,7 +1005,7 @@ function renderizarTabla() {
     const searchTerm = (document.getElementById('globalSearch')?.value || '').toLowerCase();
     const sortBy = document.getElementById('ordenarRegistros')?.value || 'recientes';
 
-    console.log(`📊 [JS] Renderizando: ${registros.length} registros totales.`);
+    console.log(`[DATA] [JS] Renderizando: ${registros.length} registros totales.`);
 
     let filtrados = registros.filter(reg => {
         const matchText = !searchTerm ||
@@ -903,9 +1019,9 @@ function renderizarTabla() {
         return matchText;
     });
 
-    console.log(`🔍 [JS] Después de filtrar: ${filtrados.length} registros visibles.`);
+    console.log(`[SEARCH] [JS] Después de filtrar: ${filtrados.length} registros visibles.`);
     if (filtrados.length === 0 && registros.length > 0) {
-        console.warn("⚠️ [JS] ¡Atención! Los datos existen pero el filtro los está ocultando todos.");
+        console.warn("[WARN] [JS] ¡Atención! Los datos existen pero el filtro los está ocultando todos.");
     }
 
     filtrados.sort((a, b) => {
@@ -1108,7 +1224,7 @@ function renderizarTabla() {
             tbody.appendChild(tr);
 
         } catch (err) {
-            console.error("❌ [JS] Error renderizando fila:", err, reg);
+            console.error("[ERROR] [JS] Error renderizando fila:", err, reg);
         }
     });
 
@@ -1524,10 +1640,10 @@ function procesarCambioEstadoBloqueo(reg, oldEstado, newEstado, newOperador, ind
         if (!tieneLinea) {
             if (idx > -1) {
                 indiceDetallesActual = idx;
-                abrirDetalles(idx);
+                if (typeof cerrarDetalles === 'function') cerrarDetalles();
                 setTimeout(() => {
                     abrirSelectorLineaWidget('ETB');
-                }, 200);
+                }, 100);
             }
         }
     } else if (op.includes('wom')) {
@@ -1535,7 +1651,7 @@ function procesarCambioEstadoBloqueo(reg, oldEstado, newEstado, newOperador, ind
         if (!tienePin) {
             if (idx > -1) {
                 indiceDetallesActual = idx;
-                abrirDetalles(idx);
+                if (typeof cerrarDetalles === 'function') cerrarDetalles();
             }
             imeiEsperandoPin = reg.imei;
             const copyEl = document.getElementById('pinImeiCopy');
@@ -1632,7 +1748,17 @@ async function probarCambioEstado(imei, nuevoEstado = "Extravío", nuevoOperador
     }
 
     renderizarTabla();
-    abrirDetalles(idx);
+    const opLow = (nuevoOperador || '').toLowerCase();
+    const estLow = (nuevoEstado || '').toLowerCase();
+    const esBloq = estLow.includes('robo') || estLow.includes('hurto') || estLow.includes('extravi') || estLow.includes('no registrado');
+    const pideLinea = esBloq && opLow.includes('etb') && (!reg.linea || reg.linea === 'null' || reg.linea === '');
+    const pidePin = esBloq && opLow.includes('wom') && (!reg.pin_desbloqueo || reg.pin_desbloqueo === 'null' || reg.pin_desbloqueo === '');
+
+    if (!pideLinea && !pidePin) {
+        abrirDetalles(idx);
+    } else {
+        if (typeof cerrarDetalles === 'function') cerrarDetalles();
+    }
     procesarCambioEstadoBloqueo(reg, oldEstado, nuevoEstado, nuevoOperador, idx);
 }
 
@@ -2278,11 +2404,19 @@ async function forzarScraper(imei, index) {
             }
 
             renderizarTabla();
-            if (indiceDetallesActual === targetIdx) {
+            const opLow = (res.operador || '').toLowerCase();
+            const estLow = (res.estado || '').toLowerCase();
+            const esBloq = estLow.includes('robo') || estLow.includes('hurto') || estLow.includes('extravi') || estLow.includes('no registrado');
+            const pideLinea = esBloq && opLow.includes('etb') && (!registros[targetIdx].linea || registros[targetIdx].linea === 'null' || registros[targetIdx].linea === '');
+            const pidePin = esBloq && opLow.includes('wom') && (!registros[targetIdx].pin_desbloqueo || registros[targetIdx].pin_desbloqueo === 'null' || registros[targetIdx].pin_desbloqueo === '');
+
+            if (indiceDetallesActual === targetIdx && !pideLinea && !pidePin) {
                 abrirDetalles(targetIdx);
                 if (typeof actualizarWidgetInteligente === 'function') {
                     actualizarWidgetInteligente(registros[targetIdx]);
                 }
+            } else if (pideLinea || pidePin) {
+                if (typeof cerrarDetalles === 'function') cerrarDetalles();
             }
             procesarCambioEstadoBloqueo(registros[targetIdx], oldEstado, res.estado, res.operador, targetIdx);
         } else {
@@ -2768,12 +2902,12 @@ async function consultarModeloFila(imei, originalIndex) {
 
     try {
         // 1. Ejecutar ConsultarModelo (Estándar) primero
-        let res = await window.pywebview.api.consultar_modelo(imei);
+        let res = await window.pywebview.api.consultar_modelo(imei, headlessEnabled);
 
         // 2. Si la respuesta es Error o falla, ejecutar automáticamente ConsultarModeloPro
         if (!res || res.status !== 'success' || !res.modelo) {
             showToast('Modelo Estándar falló. Reintentando con Modo Pro...', 'warning');
-            res = await window.pywebview.api.consultar_modelo_pro(imei, false);
+            res = await window.pywebview.api.consultar_modelo_pro(imei, false, headlessEnabled);
         }
 
         if (res && res.status === 'success' && res.modelo) {
@@ -3012,7 +3146,7 @@ async function solicitarDesbloqueoWom() {
     const modeloActual = (reg.modelo || '').trim();
     const modeloLower = modeloActual.toLowerCase();
     if (!modeloActual || modeloLower === 'error' || modeloLower === 'error pro' || modeloLower.startsWith('error')) {
-        alertas.push("❌ ERROR CRÍTICO: El modelo del dispositivo es obligatorio para el desbloqueo WOM y NO puede ser 'Error' o 'Error Pro'.");
+        alertas.push("ERROR CRÍTICO: El modelo del dispositivo es obligatorio para el desbloqueo WOM y NO puede ser 'Error' o 'Error Pro'.");
     }
 
     if (!encNombre) {
@@ -3080,7 +3214,7 @@ async function cargarFotoDispositivoWom() {
         womDesbFotoRuta = res.ruta;
         const nombre = res.ruta.split('/').pop().split('\\').pop();
         document.getElementById('womDesbFotoNombre').innerText = nombre;
-        document.getElementById('womDesbFotoCheck').innerText = '✓';
+        document.getElementById('womDesbFotoCheck').innerHTML = '<svg class="w-3.5 h-3.5 inline-block text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>';
         showToast('Foto guardada', 'success');
     } else if (res.status !== 'cancelled') {
         showToast('Error: ' + res.mensaje, 'error');
@@ -3211,7 +3345,7 @@ async function consultarModeloProDetalles() {
     showToastLoading("Consultando modelo versión Pro...");
 
     try {
-        const res = await window.pywebview.api.consultar_modelo_pro(imei);
+        const res = await window.pywebview.api.consultar_modelo_pro(imei, false, headlessEnabled);
         hideToastLoading();
         inputModelo.classList.remove('input-beam-modelo');
         if (res && res.status === "success" && res.modelo) {
@@ -3358,7 +3492,7 @@ async function generarDeclaracion(tipo) {
                 renderizarPanelOperativo(registros[indiceDetallesActual]);
             }
             abrirDetalles(indiceDetallesActual);
-            showToast(res.mensaje || "Declaración WOM generada ✓", 'file');
+            showToast(res.mensaje || "Declaración WOM generada", 'file');
         } else {
             showToast(res?.mensaje || "Error al generar declaración WOM", 'error');
         }
@@ -3391,7 +3525,7 @@ async function confirmarEnvioCorreoWom() {
     hideToastLoading();
     btn.disabled = false;
     btn.style.opacity = '1';
-    btn.innerText = '✉️ Enviar Correo de Desbloqueo';
+    btn.innerHTML = '<svg class="w-4 h-4 inline mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Enviar Correo de Desbloqueo';
 
     if (res.status === 'success') {
         showToast(res.mensaje, 'save');
@@ -3582,6 +3716,9 @@ document.addEventListener('mousedown', (e) => {
 
 async function loginCompletadoExitosamente(user) {
     currentUser = user;
+
+    // Si la pantalla de mantenimiento estaba visible, ocultarla
+    ocultarPantallaMantenimiento();
 
     // Aplicar nombre y avatar en la UI (config modal, etc.)
     applyProfileToUI(
@@ -3780,7 +3917,7 @@ function switchAuthMode(mode) {
 // ==========================================
 
 async function ejecutarLogin() {
-    console.log("🔑 [JS] ejecutarLogin iniciado...");
+    console.log("[AUTH] [JS] ejecutarLogin iniciado...");
     const loginUserEl = document.getElementById('loginUser');
     const loginPasswordEl = document.getElementById('loginPassword');
     let user = loginUserEl ? loginUserEl.value.trim() : '';
@@ -3800,7 +3937,7 @@ async function ejecutarLogin() {
         }
     }
 
-    console.log(`🔑 [JS] Datos ingresados: usuario='${user}', contraseña=${pass ? 'SI' : 'NO'}`);
+    console.log(`[AUTH] [JS] Datos ingresados: usuario='${user}', contraseña=${pass ? 'SI' : 'NO'}`);
 
     // MAGIA: Forzar que las alertas se vean por encima de la pantalla de login (authOverlay z-index es 999999)
     const toastElement = document.getElementById('toast');
@@ -3827,10 +3964,10 @@ async function ejecutarLogin() {
 
     showToastLoading("Iniciando sesión...");
     try {
-        console.log("🔑 [JS] Enviando petición a Python (login_usuario)...");
+        console.log("[AUTH] [JS] Enviando petición a Python (login_usuario)...");
         // Llama a Python
         const res = await window.pywebview.api.login_usuario(user, pass);
-        console.log("🔑 [JS] Respuesta recibida de Python:", res);
+        console.log("[AUTH] [JS] Respuesta recibida de Python:", res);
         hideToastLoading();
 
         if (res.status === 'success') {
@@ -3838,12 +3975,12 @@ async function ejecutarLogin() {
             await loginCompletadoExitosamente(res.user);
         } else if (res.status === 'paused') {
             showToast(res.mensaje, "warning");
-            mostrarPantallaSleep();
+            mostrarPantallaMantenimiento(res.maintenance_until || '');
         } else {
             showToast(res.mensaje, "error");
         }
     } catch (e) {
-        console.error("❌ [JS] Error en ejecutarLogin:", e);
+        console.error("[ERROR] [JS] Error en ejecutarLogin:", e);
         hideToastLoading();
         showToast("Error de conexión al iniciar sesión: " + e.message, "error");
     }
@@ -4044,7 +4181,7 @@ function reiniciarTemporizadorInactividad() {
 
 async function ejecutarLogoutPorInactividad() {
     if (!currentUser) return;
-    console.log("⏰ [INACTIVIDAD] 20 minutos sin interacción. Cerrando sesión y recordando usuario...");
+    console.log("[INACTIVIDAD] 20 minutos sin interacción. Cerrando sesión y recordando usuario...");
     detenerMonitoreoInactividad();
 
     try {
@@ -4071,6 +4208,16 @@ async function ejecutarLogoutPorInactividad() {
 
     registros = [];
     renderizarTabla();
+
+    // Verificar si la BD está en mantenimiento antes de ir al login
+    try {
+        const stateRes = await window.pywebview.api.obtener_estado_bd();
+        if (stateRes && stateRes.db_status === 'paused') {
+            mostrarPantallaMantenimiento(stateRes.maintenance_until || '');
+            showToast("Sesión cerrada por 20 minutos de inactividad", "warning");
+            return;
+        }
+    } catch (_) {}
 
     const authOverlay = document.getElementById('authOverlay');
     if (authOverlay) {
@@ -4110,6 +4257,7 @@ async function ejecutarLogout() {
         document.getElementById('logoutBtn').classList.add('hidden');
         document.getElementById('dbStatusToggle')?.classList.add('hidden');
         document.getElementById('sleepOverlay')?.classList.add('hidden');
+        ocultarPantallaMantenimiento();
         document.getElementById('btnAdminHide')?.classList.add('hidden');
         document.getElementById('btnClientesSettingsAdmin')?.classList.add('hidden');
         document.getElementById('btnLineasSettingsAdmin')?.classList.add('hidden');
@@ -4117,11 +4265,18 @@ async function ejecutarLogout() {
         registros = [];
         renderizarTabla();
 
+        // Chequear si la BD sigue en mantenimiento al cerrar sesión
+        try {
+            const stateRes = await window.pywebview.api.obtener_estado_bd();
+            if (stateRes && stateRes.db_status === 'paused') {
+                mostrarPantallaMantenimiento(stateRes.maintenance_until || '');
+                return;
+            }
+        } catch (_) {}
+
         document.getElementById('authOverlay').style.opacity = '1';
         document.getElementById('authOverlay').classList.remove('hidden');
 
-        // Al cerrar sesión mantenemos el usuario recordado en localStorage
-        // pero reseteamos el flag para que al volver se muestre el perfil.
         window.usuarioRecordadoRechazado = false;
         const pwdEl = document.getElementById('loginPassword');
         if (pwdEl) pwdEl.value = '';
@@ -4154,10 +4309,21 @@ async function toggleDbStatus() {
     }
 
     const nuevoEstado = currentDbStatus === 'active' ? 'paused' : 'active';
+
+    // Si va a pausar, pedir fecha/hora de reactivación
+    let fechaReactivacion = null;
+    if (nuevoEstado === 'paused') {
+        // Mostrar modal inline de fecha/hora
+        fechaReactivacion = await pedirFechaReactivacion();
+        if (fechaReactivacion === null) return; // cancelado
+    }
+
     showToastLoading(nuevoEstado === 'paused' ? "Deteniendo base de datos..." : "Activando base de datos...");
 
     try {
-        const res = await window.pywebview.api.cambiar_estado_bd(currentUser.usuario, nuevoEstado);
+        const res = await window.pywebview.api.cambiar_estado_bd(
+            currentUser.usuario, nuevoEstado, fechaReactivacion || undefined
+        );
         hideToastLoading();
 
         if (res.status === 'success') {
@@ -4171,6 +4337,68 @@ async function toggleDbStatus() {
         hideToastLoading();
         showToast("Error al cambiar estado de base de datos", "error");
     }
+}
+
+/**
+ * Muestra un mini-modal nativo para que el admin ingrese la fecha/hora de reactivación.
+ * Devuelve el string de fecha o '' si omite, o null si cancela.
+ */
+function pedirFechaReactivacion() {
+    return new Promise((resolve) => {
+        // Crear modal de fecha
+        const backdrop = document.createElement('div');
+        backdrop.style.cssText = 'position:fixed;inset:0;z-index:99999999;background:rgba(5,2,14,0.85);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;';
+
+        // Valor por defecto: ahora + 2 horas
+        const now = new Date();
+        now.setHours(now.getHours() + 2);
+        const pad = n => String(n).padStart(2, '0');
+        const defaultVal = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+        backdrop.innerHTML = `
+            <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(249,115,22,0.3);border-radius:24px;padding:32px 36px;width:360px;display:flex;flex-direction:column;gap:18px;box-shadow:0 0 60px rgba(249,115,22,0.12);">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <div style="width:36px;height:36px;border-radius:10px;background:rgba(249,115,22,0.15);border:1px solid rgba(249,115,22,0.35);display:flex;align-items:center;justify-content:center;">
+                        <svg width="18" height="18" fill="none" stroke="#f97316" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                    <div>
+                        <div style="font-size:14px;font-weight:800;color:rgba(255,255,255,0.9);">Poner en Mantenimiento</div>
+                        <div style="font-size:10px;color:rgba(249,115,22,0.7);letter-spacing:0.1em;text-transform:uppercase;font-weight:700;">Fecha de reactivación</div>
+                    </div>
+                </div>
+                <div style="font-size:12px;color:rgba(255,255,255,0.5);line-height:1.5;">Ingresa cuándo estará disponible la plataforma para los usuarios. Puedes dejarlo vacío si no tienes fecha definida.</div>
+                <input id="maintDateInput" type="datetime-local" value="${defaultVal}"
+                    style="background:rgba(255,255,255,0.06);border:1px solid rgba(249,115,22,0.25);border-radius:12px;padding:10px 14px;color:rgba(255,255,255,0.85);font-size:13px;outline:none;width:100%;color-scheme:dark;">
+                <div style="display:flex;gap:10px;">
+                    <button id="maintCancelBtn" style="flex:1;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.6);font-size:12px;font-weight:700;cursor:pointer;transition:all 0.2s;">Cancelar</button>
+                    <button id="maintSkipBtn" style="flex:1;padding:10px;border-radius:12px;border:1px solid rgba(249,115,22,0.2);background:rgba(249,115,22,0.08);color:rgba(249,115,22,0.8);font-size:12px;font-weight:700;cursor:pointer;transition:all 0.2s;">Sin fecha</button>
+                    <button id="maintConfirmBtn" style="flex:1;padding:10px;border-radius:12px;border:none;background:linear-gradient(135deg,#c2410c,#f97316);color:#fff;font-size:12px;font-weight:800;cursor:pointer;box-shadow:0 4px 15px rgba(249,115,22,0.3);transition:all 0.2s;">Confirmar</button>
+                </div>
+            </div>`;
+
+        document.body.appendChild(backdrop);
+        backdrop.querySelector('#maintDateInput').focus();
+
+        function destroy() { document.body.removeChild(backdrop); }
+
+        backdrop.querySelector('#maintCancelBtn').onclick = () => { destroy(); resolve(null); };
+        backdrop.querySelector('#maintSkipBtn').onclick = () => { destroy(); resolve(''); };
+        backdrop.querySelector('#maintConfirmBtn').onclick = () => {
+            const val = backdrop.querySelector('#maintDateInput').value;
+            destroy();
+            if (val) {
+                // Formatear a texto legible: "DD/MM/YYYY HH:MM"
+                try {
+                    const d = new Date(val);
+                    const pad = n => String(n).padStart(2, '0');
+                    resolve(`${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`);
+                } catch (_) { resolve(val); }
+            } else {
+                resolve('');
+            }
+        };
+        backdrop.addEventListener('click', (e) => { if (e.target === backdrop) { destroy(); resolve(null); } });
+    });
 }
 
 // Agregar atajos de teclado para inicio de sesión en inputs
@@ -4536,7 +4764,7 @@ async function etbImprimirAnexos() {
         showToast('PDF listo en Preview', 'file');
         const step = document.getElementById('etbStepAnexos');
         step.querySelector('.etb-step-ok').classList.remove('hidden');
-        step.querySelector('.etb-step-ok').innerText = '✓ PDF abierto en Preview';
+        step.querySelector('.etb-step-ok').innerHTML = '<svg class="w-3.5 h-3.5 inline mr-1 text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>PDF abierto en Preview';
     } else {
         showToast(res.mensaje, 'error');
     }
@@ -4553,7 +4781,7 @@ async function etbCargarAnexosFirmados() {
         const nombre = res.ruta.split('/').pop();
         const step = document.getElementById('etbStepAnexos');
         step.querySelector('.etb-step-ok').classList.remove('hidden');
-        step.querySelector('.etb-step-ok').innerText = `✓ ${nombre}`;
+        step.querySelector('.etb-step-ok').innerHTML = `<svg class="w-3.5 h-3.5 inline mr-1 text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>${nombre}`;
         showToast('Anexos cargados', 'success');
     } else if (res.status !== 'cancelled') {
         showToast(res.mensaje, 'error');
@@ -4572,7 +4800,7 @@ async function etbCargarFotoCelular() {
         const nombre = res.ruta.split('/').pop();
         const step = document.getElementById('etbStepCelular');
         step.querySelector('.etb-step-ok').classList.remove('hidden');
-        step.querySelector('.etb-step-ok').innerText = `✓ ${nombre}`;
+        step.querySelector('.etb-step-ok').innerHTML = `<svg class="w-3.5 h-3.5 inline mr-1 text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>${nombre}`;
         showToast('Foto convertida a PDF', 'success');
     } else if (res.status !== 'cancelled') {
         showToast(res.mensaje, 'error');
@@ -4701,7 +4929,9 @@ function applyProfileToUI(correo, avatarUrl) {
     const imgEl   = document.getElementById('profileUserImage');
 
     // Nombre a mostrar: nombre guardado o parte local del correo
-    const nombre = currentUser?.nombre || (correo ? correo.split('@')[0] : 'Usuario');
+    // Si el nombre guardado contiene @ (formato correo), usar solo la parte local
+    let nombre = currentUser?.nombre || (correo ? correo.split('@')[0] : 'Usuario');
+    if (nombre && nombre.includes('@')) nombre = nombre.split('@')[0];
     if (nameEl)  nameEl.textContent  = nombre;
     if (emailEl) emailEl.textContent = correo || '';
     if (initEl)  initEl.textContent  = (nombre || correo || 'U').charAt(0).toUpperCase();
@@ -5465,7 +5695,7 @@ function renderizarTablaFastReg(filtrados) {
             // Estado de pago del lote (todos pagados = Sí, sino No)
             const todosLotePagados = subItems.every(s => s.PAGO === 'Sí');
             const pagoLoteClass = todosLotePagados ? 'pago-si' : 'pago-no';
-            const pagoLoteText = todosLotePagados ? '✓ Todo Pagado' : '× Marcar Pagado';
+            const pagoLoteText = todosLotePagados ? 'Todo Pagado' : 'Marcar Pagado';
 
             const trStack = document.createElement('tr');
             trStack.className = 'lote-header-tr';
@@ -5484,8 +5714,8 @@ function renderizarTablaFastReg(filtrados) {
                     LOTE <span style="opacity:0.65;font-weight:600;">#${subItems.length}</span>
                 </td>
                 <td style="cursor:pointer;" onclick="toggleGrupoFastReg('${gId}', this.closest('tr').querySelector('.group-arrow-btn'))">
-                    <span style="font-size:10px;color:rgba(74,222,128,0.85);font-weight:700;">✓ ${exitosos}</span>
-                    ${fallidos > 0 ? `<span style="font-size:10px;color:rgba(248,113,113,0.85);font-weight:700;margin-left:5px;">✗ ${fallidos}</span>` : ''}
+                    <span style="font-size:10px;color:rgba(74,222,128,0.85);font-weight:700;display:inline-flex;align-items:center;gap:2px;"><svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>${exitosos}</span>
+                    ${fallidos > 0 ? `<span style="font-size:10px;color:rgba(248,113,113,0.85);font-weight:700;margin-left:5px;display:inline-flex;align-items:center;gap:2px;"><svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>${fallidos}</span>` : ''}
                 </td>
                 <td style="font-size:12px;color:rgba(255,255,255,0.55);cursor:pointer;" onclick="toggleGrupoFastReg('${gId}', this.closest('tr').querySelector('.group-arrow-btn'))">${clienteStr}</td>
                 <td style="cursor:pointer;" onclick="toggleGrupoFastReg('${gId}', this.closest('tr').querySelector('.group-arrow-btn'))">
@@ -5978,22 +6208,22 @@ function formatNotificationText(notif) {
 }
 
 async function cargarNotificaciones() {
-    console.log("📡 [JS] Iniciando cargarNotificaciones...");
+    console.log("[REALTIME] [JS] Iniciando cargarNotificaciones...");
     // Solo cargar si el usuario está autenticado
     if (!currentUser) return;
     if (!window.pywebview || !window.pywebview.api) {
-        console.warn("📡 [JS] pywebview o su API no están disponibles todavía.");
+        console.warn("[REALTIME] [JS] pywebview o su API no están disponibles todavía.");
         return;
     }
     try {
-        console.log("📡 [JS] Llamando a obtener_notificaciones en Python...");
+        console.log("[REALTIME] [JS] Llamando a obtener_notificaciones en Python...");
         const res = await window.pywebview.api.obtener_notificaciones();
-        console.log("📡 [JS] Respuesta recibida de obtener_notificaciones:", res);
+        console.log("[REALTIME] [JS] Respuesta recibida de obtener_notificaciones:", res);
 
         if (res && res.status === 'success') {
             const rawData = res.data;
             listNotificaciones = Array.isArray(rawData) ? rawData : [];
-            console.log(`📡 [JS] Notificaciones asignadas: ${listNotificaciones.length} elementos.`);
+            console.log(`[REALTIME] [JS] Notificaciones asignadas: ${listNotificaciones.length} elementos.`);
 
             // Detect and trigger real-time toasts for new notifications
             listNotificaciones.forEach(notif => {
@@ -6016,18 +6246,18 @@ async function cargarNotificaciones() {
 
             isFirstNotificationLoad = false;
         } else {
-            console.warn("📡 [JS] Error de backend al cargar notificaciones:", res);
+            console.warn("[REALTIME] [JS] Error de backend al cargar notificaciones:", res);
         }
     } catch (e) {
-        console.error("📡 [JS] Error de comunicación al obtener notificaciones:", e);
+        console.error("[REALTIME] [JS] Error de comunicación al obtener notificaciones:", e);
     }
 
     try {
-        console.log("📡 [JS] Llamando a renderizarNotificacionesList() y actualizarBadgeNotificaciones()...");
+        console.log("[REALTIME] [JS] Llamando a renderizarNotificacionesList() y actualizarBadgeNotificaciones()...");
         renderizarNotificacionesList();
         actualizarBadgeNotificaciones();
     } catch (renderErr) {
-        console.error("📡 [JS] Excepción al actualizar interfaz de notificaciones:", renderErr);
+        console.error("[REALTIME] [JS] Excepción al actualizar interfaz de notificaciones:", renderErr);
     }
 }
 
@@ -6046,7 +6276,7 @@ function actualizarBadgeNotificaciones() {
 const _ultimasNotifsRecibidas = new Map();
 
 window.recibirNotificacionRealtime = function (notif) {
-    console.log("📡 [JS Realtime] Notificación recibida:", notif);
+    console.log("[REALTIME] [JS Realtime] Notificación recibida:", notif);
     if (!notif) return;
 
     if (!Array.isArray(listNotificaciones)) {
@@ -6169,10 +6399,10 @@ function toggleNotificacionesModal(event) {
 window.toggleNotificacionesModal = toggleNotificacionesModal;
 
 function renderizarNotificacionesList() {
-    console.log("📡 [JS] Ejecutando renderizarNotificacionesList...");
+    console.log("[REALTIME] [JS] Ejecutando renderizarNotificacionesList...");
     const container = document.getElementById('notificacionesList');
     if (!container) {
-        console.warn("📡 [JS] No se encontró el contenedor de la lista de notificaciones.");
+        console.warn("[REALTIME] [JS] No se encontró el contenedor de la lista de notificaciones.");
         return;
     }
 
@@ -6189,7 +6419,7 @@ function renderizarNotificacionesList() {
     }
 
     if (!Array.isArray(listNotificaciones) || listNotificaciones.length === 0) {
-        console.log("📡 [JS] Lista de notificaciones vacía.");
+        console.log("[REALTIME] [JS] Lista de notificaciones vacía.");
         container.innerHTML = `
             <div class="notif-empty-state">
                 <svg class="w-7 h-7 mb-2 opacity-30" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
@@ -6201,7 +6431,7 @@ function renderizarNotificacionesList() {
         return;
     }
 
-    console.log(`📡 [JS] Renderizando ${listNotificaciones.length} notificaciones...`);
+    console.log(`[REALTIME] [JS] Renderizando ${listNotificaciones.length} notificaciones...`);
     container.innerHTML = "";
 
     listNotificaciones.forEach(notif => {
@@ -6466,7 +6696,7 @@ window.refrescarTablaManual = async function () {
     try {
         if (window.pywebview && window.pywebview.api && typeof window.pywebview.api.reconectar_bd === 'function') {
             const reconnectRes = await window.pywebview.api.reconectar_bd();
-            console.log("🔄 Resultado reconexión BD:", reconnectRes);
+            console.log("[REALTIME] Resultado reconexión BD:", reconnectRes);
         }
 
         if (window.pywebview && window.pywebview.api) {
@@ -6507,12 +6737,12 @@ window.marcarBotonRefrescarDisponible = function () {
 };
 
 window.recibirActualizacionRegistros = async function () {
-    console.log('🔄 [Realtime] Novedad en BD (registros), activando indicador de actualización...');
+    console.log('[REALTIME] [Realtime] Novedad en BD (registros), activando indicador de actualización...');
     window.marcarBotonRefrescarDisponible();
 };
 
 window.recibirActualizacionFastReg = async function () {
-    console.log('🔄 [Realtime] Novedad en BD (FastReg), activando indicador de actualización...');
+    console.log('[REALTIME] [Realtime] Novedad en BD (FastReg), activando indicador de actualización...');
     window.marcarBotonRefrescarDisponible();
 };
 
@@ -6528,7 +6758,7 @@ async function forzarScraperDetalles() {
     abrirDetalles(indiceDetallesActual);
     showToastLoading('Consultando estado IMEI...');
     try {
-        const res = await window.pywebview.api.actualizar_imei(targetImei, true);
+        const res = await window.pywebview.api.actualizar_imei(targetImei, headlessEnabled);
         hideToastLoading();
         if (res && res.status === 'success') {
             showToast('Estado actualizado correctamente', 'success');
@@ -6581,12 +6811,12 @@ async function consultarBlacklistDetalles() {
 
     showToastLoading('Consultando Blacklist GSMA en iunlocker.com...');
     try {
-        const res = await window.pywebview.api.consultar_blacklist(reg.imei);
+        const res = await window.pywebview.api.consultar_blacklist(reg.imei, false, headlessEnabled);
         hideToastLoading();
 
         if (res && res.status === 'success') {
             const enBlacklist = res.en_blacklist || false;
-            const etiqueta = enBlacklist ? '⚠️ IMEI en Blacklist' : '✅ IMEI Limpio (Clean)';
+            const etiqueta = enBlacklist ? 'IMEI en Blacklist' : 'IMEI Limpio (Clean)';
             showToast(etiqueta, enBlacklist ? 'error' : 'success');
 
             // Actualizar campo blacklist en el array local
@@ -6649,12 +6879,12 @@ function copiarValorCampo(idCampo) {
     if (!el) return;
     const valor = el.value?.trim();
     if (!valor) {
-        mostrarToast('⚠️ El campo está vacío', 'warning');
+        showToast('El campo está vacío', 'warning');
         return;
     }
     navigator.clipboard.writeText(valor)
-        .then(() => mostrarToast('📋 Copiado al portapapeles', 'info'))
-        .catch(() => mostrarToast('❌ No se pudo copiar', 'error'));
+        .then(() => showToast('Copiado al portapapeles', 'copy'))
+        .catch(() => showToast('No se pudo copiar', 'error'));
 }
 window.copiarValorCampo = copiarValorCampo;
 
@@ -7371,6 +7601,10 @@ async function eliminarLineaOcultaConfirm(numero) {
 }
 
 // ── Exportaciones a window ──
+window.showToast = showToast;
+window.mostrarToast = showToast;
+window.showToastLoading = showToastLoading;
+window.hideToastLoading = hideToastLoading;
 window.abrirModuloClientes = abrirModuloClientes;
 window.cerrarModuloClientes = cerrarModuloClientes;
 window.cargarGridClientes = cargarGridClientes;

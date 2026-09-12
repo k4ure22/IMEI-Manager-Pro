@@ -30,7 +30,7 @@ ruta_tesseract = next((r for r in posibles_rutas if os.path.exists(r)), shutil.w
 if ruta_tesseract:
     pytesseract.pytesseract.tesseract_cmd = ruta_tesseract
 else:
-    print("❌ ERROR: Tesseract no encontrado. Instálalo con 'brew install tesseract'")
+    print("[ERROR] ERROR: Tesseract no encontrado. Instálalo con 'brew install tesseract'")
 
 class IMEIScraper:
     def __init__(self, headless: bool = False):
@@ -163,7 +163,7 @@ def main():
         sheet = wb.sheets[SHEET_NAME]
         app = wb.app
     except Exception as e:
-        print(f"❌ Error: No se pudo conectar a Excel. {e}")
+        print(f"[ERROR] Error: No se pudo conectar a Excel. {e}")
         return
 
     seleccion = app.selection
@@ -171,9 +171,9 @@ def main():
 
     if filas_seleccionadas:
         filas_a_procesar = filas_seleccionadas
-        print(f"📂 Modo: Procesando selección ({len(filas_a_procesar)} filas)")
+        print(f"[MODO] Modo: Procesando selección ({len(filas_a_procesar)} filas)")
     else:
-        print("📂 Modo: Procesar todo (No hay selección válida en columna A)")
+        print("[MODO] Modo: Procesar todo (No hay selección válida en columna A)")
         last_row = sheet.range('A' + str(sheet.cells.last_cell.row)).end('up').row
         filas_a_procesar = range(6, last_row + 1)
 
@@ -189,7 +189,7 @@ def main():
             imei_str = str(int(imei_val)) if isinstance(imei_val, (int, float)) else str(imei_val).strip()
             razon = str(sheet.range((i, 6)).value or "").lower().strip()
             
-            print(f"🔎 Fila {i}: {imei_str} | Razón: {razon}")
+            print(f"[PROCESO] Fila {i}: {imei_str} | Razón: {razon}")
             estado, operador = scraper.consultar(imei_str)
             
             sheet.range((i, 3)).value = estado
@@ -208,7 +208,7 @@ def main():
             print(f"-> {estado} | {operador}")
 
     except Exception as e:
-        print(f"❌ Error en ejecución: {e}")
+        print(f"[ERROR] Error en ejecución: {e}")
     finally:
         scraper.close()
         print("--- FINALIZADO ---")

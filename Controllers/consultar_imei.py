@@ -60,10 +60,11 @@ ruta_tesseract = next((r for r in posibles_rutas if os.path.exists(r)), shutil.w
 if ruta_tesseract:
     pytesseract.pytesseract.tesseract_cmd = ruta_tesseract
 else:
-    print("⚠️ AVISO: Tesseract no encontrado en rutas estándar. Si usas consultas de IMEI, instálalo en Windows (https://github.com/UB-Mannheim/tesseract/wiki) o en Mac ('brew install tesseract').")
+    print("[WARN] AVISO: Tesseract no encontrado en rutas estándar. Si usas consultas de IMEI, instálalo en Windows (https://github.com/UB-Mannheim/tesseract/wiki) o en Mac ('brew install tesseract').")
 
 class IMEIScraper:
     def __init__(self, headless: bool = False):
+        self.headless = headless
         self.driver = self._init_driver(headless=headless)
         self.wait = WebDriverWait(self.driver, 10)
         
@@ -76,10 +77,24 @@ class IMEIScraper:
         options = webdriver.ChromeOptions()
         if headless:
             options.add_argument("--headless=new")
+        else:
+            options.add_argument("--start-maximized")
         options.add_argument("--disable-blink-features=AutomationControlled")
         options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36")
         options.add_argument("--window-size=1920,1080")
-        return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+        if not headless:
+            try:
+                driver.maximize_window()
+            except Exception:
+                pass
+            if sys.platform == "darwin":
+                try:
+                    import subprocess
+                    subprocess.run(["osascript", "-e", 'tell application "Google Chrome" to activate'], check=False)
+                except Exception:
+                    pass
+        return driver
 
     def close(self):
         if self.driver:
@@ -133,6 +148,12 @@ class IMEIScraper:
     def consultar(self, imei):
         max_retries = 7
         self.driver.get(URL_CONSULTA)
+        if not self.headless and sys.platform == "darwin":
+            try:
+                import subprocess
+                subprocess.run(["osascript", "-e", 'tell application "Google Chrome" to activate'], check=False)
+            except Exception:
+                pass
         try:
             input_imei = self.wait.until(EC.presence_of_element_located((By.XPATH, '/html/body/table[1]/tbody/tr[3]/td[2]/form/table/tbody/tr[3]/td[2]/font/input')))
             input_imei.clear()
@@ -193,7 +214,7 @@ def main():
         sheet = wb.sheets[SHEET_NAME]
         app = wb.app
     except Exception as e:
-        print(f"❌ Error: No se pudo conectar a Excel. {e}")
+        print(f"[ERROR] Error: No se pudo conectar a Excel. {e}")
         return
 
     seleccion = app.selection
@@ -201,9 +222,9 @@ def main():
 
     if filas_seleccionadas:
         filas_a_procesar = filas_seleccionadas
-        print(f"📂 Modo: Procesando selección ({len(filas_a_procesar)} filas)")
+        print(f"[MODO] Procesando selección ({len(filas_a_procesar)} filas)")
     else:
-        print("📂 Modo: Procesar todo (No hay selección válida en columna A)")
+        print("[MODO] Procesar todo (No hay selección válida en columna A)")
         last_row = sheet.range('A' + str(sheet.cells.last_cell.row)).end('up').row
         filas_a_procesar = range(6, last_row + 1)
 
@@ -219,7 +240,7 @@ def main():
             imei_str = str(int(imei_val)) if isinstance(imei_val, (int, float)) else str(imei_val).strip()
             razon = str(sheet.range((i, 6)).value or "").lower().strip()
             
-            print(f"🔎 Fila {i}: {imei_str} | Razón: {razon}")
+            print(f"[PROCESO] Fila {i}: {imei_str} | Razón: {razon}")
             estado, operador = scraper.consultar(imei_str)
             
             sheet.range((i, 3)).value = estado
@@ -238,7 +259,7 @@ def main():
             print(f"-> {estado} | {operador}")
 
     except Exception as e:
-        print(f"❌ Error en ejecución: {e}")
+        print(f"[ERROR] Error en ejecución: {e}")
     finally:
         scraper.close()
         print("--- FINALIZADO ---")

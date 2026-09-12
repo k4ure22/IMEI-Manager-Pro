@@ -81,18 +81,24 @@ def guardar_estado(estado: dict):
 def verificar_y_resetear_si_necesario(estado: dict) -> dict:
     ahora = datetime.now()
 
-    # Reset por tiempo (24h desde último reset)
-    if estado.get("ultimo_reset"):
-        ultimo_reset = datetime.fromisoformat(estado["ultimo_reset"])
-        if ahora >= ultimo_reset + timedelta(hours=HORAS_RESET):
-            estado["consultas_restantes"] = LIMITE_CONSULTAS
-            estado["ultimo_reset"] = ahora.isoformat()
-            estado["bloqueado_hasta"] = None
+    # Reset por tiempo (24h desde último reset) si no hay bloqueo web futuro activo
+    if estado.get("ultimo_reset") and not estado.get("bloqueado_hasta"):
+        try:
+            ultimo_reset = datetime.fromisoformat(estado["ultimo_reset"])
+            if ahora >= ultimo_reset + timedelta(hours=HORAS_RESET):
+                estado["consultas_restantes"] = LIMITE_CONSULTAS
+                estado["ultimo_reset"] = ahora.isoformat()
+                estado["bloqueado_hasta"] = None
+        except Exception:
+            pass
 
-    # Limpiar bloqueo web si expiró
+    # Limpiar bloqueo web si ya expiró
     if estado.get("bloqueado_hasta"):
-        bloqueado_hasta = datetime.fromisoformat(estado["bloqueado_hasta"])
-        if ahora >= bloqueado_hasta:
+        try:
+            bloqueado_hasta = datetime.fromisoformat(estado["bloqueado_hasta"])
+            if ahora >= bloqueado_hasta:
+                estado["bloqueado_hasta"] = None
+        except Exception:
             estado["bloqueado_hasta"] = None
 
     return estado
@@ -101,23 +107,120 @@ def verificar_y_resetear_si_necesario(estado: dict) -> dict:
 def calcular_tiempo_restante(estado: dict) -> dict:
     ahora = datetime.now()
     
-    # Si hay un bloqueo web activo, calcular hasta ese desbloqueo
+    # 1. Si hay un bloqueo web activo, calcular hasta ese desbloqueo exacto
     if estado.get("bloqueado_hasta"):
-        bloqueado_hasta = datetime.fromisoformat(estado["bloqueado_hasta"])
-        if ahora < bloqueado_hasta:
-            diferencia = bloqueado_hasta - ahora
-            horas, resto = divmod(int(diferencia.total_seconds()), 3600)
-            return {"horas": horas, "minutos": resto // 60}
+        try:
+            bloqueado_hasta = datetime.fromisoformat(estado["bloqueado_hasta"])
+            if ahora < bloqueado_hasta:
+                diferencia = bloqueado_hasta - ahora
+                horas, resto = divmod(int(diferencia.total_seconds()), 3600)
+                return {"horas": horas, "minutos": resto // 60}
+        except Exception:
+            pass
 
-    # Si no, calcular hasta el próximo reset automático
-    ultimo_reset = datetime.fromisoformat(estado.get("ultimo_reset", ahora.isoformat()))
-    proximo_reset = ultimo_reset + timedelta(hours=HORAS_RESET)
-    diferencia = proximo_reset - ahora
-    if diferencia.total_seconds() <= 0:
-        return {"horas": 0, "minutos": 0}
-    horas, resto = divmod(int(diferencia.total_seconds()), 3600)
-    minutos = resto // 60
-    return {"horas": horas, "minutos": minutos}
+    # 2. Si no, calcular hasta el próximo reset automático
+    if estado.get("consultas_restantes", LIMITE_CONSULTAS) <= 0:
+        try:
+            ultimo_reset = datetime.fromisoformat(estado.get("ultimo_reset", ahora.isoformat()))
+            proximo_reset = ultimo_reset + timedelta(hours=HORAS_RESET)
+            diferencia = proximo_reset - ahora
+            if diferencia.total_seconds() > 0:
+                horas, resto = divmod(int(diferencia.total_seconds()), 3600)
+                return {"horas": horas, "minutos": resto // 60}
+        except Exception:
+            pass
+
+    return {"horas": 0, "minutos": 0}
+
+
+def validar_estado_pagina_web() -> dict:
+    """
+    Abre iunlocker.com/es/gsma_blacklist_check.php en modo headless y valida si ya es hábil para consultas.
+    Si la página sigue reportando límite alcanzado:
+      - NO reinicia el conteo (mantiene 0 cupos).
+      - Extrae el tiempo restante o mantiene el bloqueo previo.
+      - Retorna {"habil": False, "status": "limite_web", ...}
+    Si la página está lista y sin mensaje de bloqueo:
+      - Reinicia el conteo a 5 cupos y limpia bloqueado_hasta.
+      - Retorna {"habil": True, "status": "success", ...}
+    """
+    estado = leer_estado()
+    driver = None
+    try:
+        driver = _init_driver()
+        _log("Validando disponibilidad en página de Blacklist...")
+        driver.get("https://iunlocker.com/es/gsma_blacklist_check.php")
+
+        timeout = 15
+        end_time = time.time() + timeout
+        limite_detectado = False
+        html_completo = ""
+
+        while time.time() < end_time:
+            html_completo = driver.page_source
+            html_lower = html_completo.lower()
+
+            if "reached the limit" in html_lower or "límite" in html_lower:
+                limite_detectado = True
+                break
+
+            input_xpath = "/html/body/div[2]/section[1]/div/div/form/div[2]/input[1]"
+            els = driver.find_elements(By.XPATH, input_xpath)
+            if els and els[0].is_displayed():
+                break
+            time.sleep(0.4)
+
+        ahora = datetime.now()
+        if limite_detectado:
+            match = re.search(r'(\d+)\s*hour(?:s)?\s*(\d+)\s*minute(?:s)?', html_completo, re.IGNORECASE)
+            if match:
+                h_bloq = int(match.group(1))
+                m_bloq = int(match.group(2))
+                hasta_dt = ahora + timedelta(hours=h_bloq, minutes=m_bloq)
+                estado["bloqueado_hasta"] = hasta_dt.isoformat()
+            else:
+                if not estado.get("bloqueado_hasta"):
+                    estado["bloqueado_hasta"] = (ahora + timedelta(hours=HORAS_RESET)).isoformat()
+
+            estado["consultas_restantes"] = 0
+            guardar_estado(estado)
+            t = calcular_tiempo_restante(estado)
+            return {
+                "habil": False,
+                "status": "limite_web",
+                "mensaje": f"Límite diario alcanzado en iunlocker.com. Disponible en {t['horas']}h {t['minutos']}m",
+                "horas": t["horas"],
+                "minutos": t["minutos"],
+                "consultas_restantes": 0
+            }
+        else:
+            estado["consultas_restantes"] = LIMITE_CONSULTAS
+            estado["bloqueado_hasta"] = None
+            estado["ultimo_reset"] = ahora.isoformat()
+            guardar_estado(estado)
+            return {
+                "habil": True,
+                "status": "success",
+                "mensaje": "Página Blacklist habilitada para consultas",
+                "horas": 0,
+                "minutos": 0,
+                "consultas_restantes": LIMITE_CONSULTAS
+            }
+
+    except Exception as e:
+        t = calcular_tiempo_restante(estado)
+        return {
+            "habil": False,
+            "status": "error_validacion",
+            "mensaje": f"No se pudo verificar el sitio de Blacklist: {e}",
+            "horas": t["horas"],
+            "minutos": t["minutos"],
+            "consultas_restantes": estado.get("consultas_restantes", 0)
+        }
+    finally:
+        if driver:
+            try: driver.quit()
+            except Exception: pass
 
 
 def obtener_estado_cupos() -> dict:
@@ -143,10 +246,13 @@ def obtener_estado_cupos() -> dict:
 
 # ─── DRIVER ──────────────────────────────────────────────────────────────────
 
-def _init_driver() -> webdriver.Chrome:
+def _init_driver(headless: bool = True) -> webdriver.Chrome:
     """Mismo patrón que ConsultarModeloPro.py."""
     chrome_options = Options()
-    chrome_options.add_argument("--headless=new")
+    if headless:
+        chrome_options.add_argument("--headless=new")
+    else:
+        chrome_options.add_argument("--start-maximized")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
@@ -161,49 +267,48 @@ def _init_driver() -> webdriver.Chrome:
         "profile.managed_default_content_settings.stylesheet": 2,
     }
     chrome_options.add_experimental_option("prefs", prefs)
-    return webdriver.Chrome(options=chrome_options)
+    driver = webdriver.Chrome(options=chrome_options)
+    if not headless:
+        try:
+            driver.maximize_window()
+        except Exception:
+            pass
+        if sys.platform == "darwin":
+            try:
+                import subprocess
+                subprocess.run(["osascript", "-e", 'tell application "Google Chrome" to activate'], check=False)
+            except Exception:
+                pass
+    return driver
 
 
 # ─── CONSULTA PRINCIPAL ───────────────────────────────────────────────────────
 
-def consultar_blacklist(imei: str, con_pantallazo: bool = False) -> None:
+def consultar_blacklist(imei: str, con_pantallazo: bool = False, headless: bool = True) -> None:
     _log(f"Iniciando consulta Blacklist GSMA para IMEI: {imei}")
 
     # Verificar si estamos bloqueados por límite diario
     estado = leer_estado()
     estado = verificar_y_resetear_si_necesario(estado)
 
-    # 1. Verificar bloqueo web activo
+    # ── Si el estado local marca bloqueo o 0 cupos, validar la página en vivo al presionar ──
+    esta_bloqueado = False
     if estado.get("bloqueado_hasta"):
-        hasta = datetime.fromisoformat(estado["bloqueado_hasta"])
-        if datetime.now() < hasta:
-            t = calcular_tiempo_restante(estado)
-            guardar_estado(estado)
-            _log(f"Bloqueado por límite diario del sitio. Disponible en {t['horas']}h {t['minutos']}m")
-            _output({
-                "status": "limite_web",
-                "mensaje": f"Límite diario alcanzado en iunlocker.com. Disponible en {t['horas']}h {t['minutos']}m",
-                "horas": t["horas"],
-                "minutos": t["minutos"],
-                "consultas_restantes": estado["consultas_restantes"]
-            })
+        try:
+            hasta = datetime.fromisoformat(estado["bloqueado_hasta"])
+            if datetime.now() < hasta:
+                esta_bloqueado = True
+        except Exception:
+            pass
+
+    if esta_bloqueado or estado["consultas_restantes"] <= 0:
+        val_res = validar_estado_pagina_web()
+        if not val_res.get("habil"):
+            _output(val_res)
             return
+        estado = leer_estado()
 
-    # 2. Verificar cupos propios
-    if estado["consultas_restantes"] <= 0:
-        t = calcular_tiempo_restante(estado)
-        guardar_estado(estado)
-        _log(f"Sin consultas de Blacklist disponibles. Reinicio en {t['horas']}h {t['minutos']}m")
-        _output({
-            "status": "sin_cupos",
-            "mensaje": f"Sin consultas de Blacklist disponibles. Reinicio en {t['horas']}h {t['minutos']}m",
-            "horas": t["horas"],
-            "minutos": t["minutos"],
-            "consultas_restantes": 0
-        })
-        return
-
-    driver = _init_driver()
+    driver = _init_driver(headless=headless)
     try:
         timeout = 25
         end_time = time.time() + timeout
@@ -352,11 +457,12 @@ def consultar_blacklist(imei: str, con_pantallazo: bool = False) -> None:
             mins_bloqueo = int(match.group(2)) if match else 0
 
             # Guardar bloqueo
-            hasta_dt = datetime.now() + timedelta(hours=horas_bloqueo, minutes=mins_bloqueo)
+            ahora = datetime.now()
+            hasta_dt = ahora + timedelta(hours=horas_bloqueo, minutes=mins_bloqueo)
             estado["bloqueado_hasta"] = hasta_dt.isoformat()
-            # Sincronizar cupos propios con el sitio web
+            estado["hora_error"] = ahora.isoformat()
             estado["consultas_restantes"] = 0
-            estado["ultimo_reset"] = hasta_dt.isoformat()
+            estado["ultimo_reset"] = ahora.isoformat()
             guardar_estado(estado)
             _log(f"Límite detectado. Bloqueado hasta {hasta_dt.isoformat()}")
 
@@ -397,13 +503,17 @@ if __name__ == "__main__":
     parser.add_argument("imei", nargs="?", help="IMEI a consultar (15 dígitos)")
     parser.add_argument("--screenshot", action="store_true", help="Guardar pantallazo del resultado")
     parser.add_argument("--estado", action="store_true", help="Solo mostrar estado de cupos")
+    parser.add_argument("--validar-web", action="store_true", help="Validar en vivo si la página web ya es hábil")
+    parser.add_argument("--visible", action="store_true", help="Mostrar ventana de Chrome (no headless)")
 
     args = parser.parse_args()
 
     if args.estado:
         _output(obtener_estado_cupos())
+    elif args.validar_web:
+        _output(validar_estado_pagina_web())
     elif args.imei:
-        consultar_blacklist(args.imei, con_pantallazo=args.screenshot)
+        consultar_blacklist(args.imei, con_pantallazo=args.screenshot, headless=not args.visible)
     else:
         parser.print_help()
         sys.exit(1)

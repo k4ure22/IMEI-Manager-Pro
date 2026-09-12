@@ -437,8 +437,17 @@ tr.neon-amarillo .neon-indicator {
 }
 
 @keyframes neonAmarilloFlicker {
-    0%, 100% { opacity: 0.70; box-shadow: 0 0 6px 1px rgba(255, 184, 0, 0.50); }
-    50% { opacity: 0.95; box-shadow: 0 0 10px 2px rgba(255, 184, 0, 0.70); }
+
+    0%,
+    100% {
+        opacity: 0.70;
+        box-shadow: 0 0 6px 1px rgba(255, 184, 0, 0.50);
+    }
+
+    50% {
+        opacity: 0.95;
+        box-shadow: 0 0 10px 2px rgba(255, 184, 0, 0.70);
+    }
 }
 
 tbody tr:hover .neon-indicator {
@@ -606,8 +615,8 @@ tbody tr:hover .neon-indicator {
     justify-content: center;
     height: var(--dock-height);
     align-items: flex-end;
-    z-index: 50000;
-    /* Siempre visible por encima de modales */
+    /* El dock tiene z-index mayor que el toast para que este emerja de detrás */
+    z-index: 61000;
     pointer-events: none;
     transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -629,22 +638,6 @@ tbody tr:hover .neon-indicator {
     overflow: visible;
     isolation: isolate;
     transition: all 0.3s ease;
-}
-
-.mac-dock.toast-core-split {
-    animation: dockCoreSplit 960ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.mac-dock.toast-core-merge {
-    animation: dockCoreMerge 840ms cubic-bezier(0.32, 0.02, 0.17, 1);
-}
-
-.mac-dock.toast-core-split-left {
-    animation: dockCoreSplitLeft 960ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.mac-dock.toast-core-merge-left {
-    animation: dockCoreMergeLeft 840ms cubic-bezier(0.32, 0.02, 0.17, 1);
 }
 
 [data-theme="dark"] .mac-dock {
@@ -768,36 +761,98 @@ tbody tr:hover .neon-indicator {
     visibility: visible !important;
 }
 
+#pinOverlay,
+#lineSelectorOverlay {
+    z-index: 50000 !important;
+}
+
 /* ==========================================
    CONFIG OVERLAY & MODAL (APPLE / MACOS STYLE)
    ========================================== */
 #configOverlay {
-    background: rgba(4, 2, 10, 0.55);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
     transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.25s ease;
     isolation: isolate;
 }
 
-#configOverlay .config-popover-panel {
-    background: rgba(13, 17, 30, 0.96);
-    border: 1px solid rgba(255, 255, 255, 0.10);
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.70), 0 4px 20px rgba(0, 0, 0, 0.40);
-    transform: translateY(-12px) scale(0.96) translateZ(0);
+#configOverlay::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(4, 2, 10, 0.55);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    pointer-events: none;
+    z-index: 0;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    /* FIX: ocultar el pseudo-elemento cuando el overlay está inactivo */
     opacity: 0;
-    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease;
-    isolation: isolate;
-    contain: paint;
-    backface-visibility: hidden;
+    transition: opacity 0.25s ease;
+    will-change: opacity;
 }
 
-#configOverlay.active .config-popover-panel {
-    transform: translateY(0) scale(1) translateZ(0);
+#configOverlay.active::before {
     opacity: 1;
 }
 
+#configOverlay .config-popover-panel {
+    /* posición manejada desde el HTML (absolute top-16 left-6) */
+    position: absolute !important;
+    z-index: 1;
+    background: rgba(13, 17, 30, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.70), 0 4px 20px rgba(0, 0, 0, 0.40);
+    transform: translate3d(0, -12px, 0) scale(0.96);
+    -webkit-transform: translate3d(0, -12px, 0) scale(0.96);
+    opacity: 0;
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transform-style: preserve-3d;
+    will-change: transform, opacity;
+}
+
+#configOverlay.active .config-popover-panel {
+    transform: translate3d(0, 0, 0) scale(1);
+    -webkit-transform: translate3d(0, 0, 0) scale(1);
+    opacity: 1;
+}
+
+/* === iOS-style Profile Card Header === */
 .config-header-card {
     background: linear-gradient(145deg, rgba(22, 28, 50, 0.95) 0%, rgba(11, 15, 28, 0.98) 100%);
+}
+
+/* Avatar sin borde raro — anillo de color limpio */
+.config-avatar-ring {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    padding: 2.5px;
+    background: linear-gradient(135deg, #22d3ee 0%, #6366f1 50%, #a855f7 100%);
+    box-shadow: 0 0 0 0px transparent;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.config-avatar-ring:hover {
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+    transform: scale(1.04);
+}
+
+.config-avatar-inner {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: #0c101d;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
 }
 
 .config-section {
@@ -1112,17 +1167,16 @@ button.config-item-button:active {
     background: var(--dock-bg);
     border: 1px solid var(--dock-bd);
     border-top-color: var(--dock-bd-top);
-    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.32), 0 0 20px var(--toast-glow);
     backdrop-filter: blur(28px) saturate(180%);
     -webkit-backdrop-filter: blur(28px) saturate(180%);
     color: var(--color);
-    padding: 12px 18px;
-    border-radius: 16px;
-    transform: translate3d(var(--toast-x-start, 0px), var(--toast-y, 0px), 0) scaleX(0.12) scaleY(0.94);
-    transform-origin: left center;
+    height: 50px;
+    padding: 0 18px;
+    border-radius: 12px;
+    /* Posición base: oculto detrás del dock (z-index 61000) */
+    transform: translate3d(var(--toast-x-start, 0px), var(--toast-y, 0px), 0);
     opacity: 0;
-    transition: transform 0.88s cubic-bezier(0.22, 1, 0.36, 1),
-        opacity 0.56s ease;
+    /* z-index por debajo del dock para emerger de detrás de él */
     z-index: 60000;
     display: flex;
     align-items: center;
@@ -1130,144 +1184,98 @@ button.config-item-button:active {
     font-size: 13.5px;
     font-weight: 500;
     pointer-events: none;
-    will-change: transform, opacity, filter;
-    isolation: isolate;
+    will-change: transform, opacity;
+    max-width: min(440px, calc(100vw - 36px));
+    box-sizing: border-box;
+}
+
+[data-theme="dark"] .toast {
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.60),
+        inset 0 0 15px rgba(217, 70, 239, 0.05);
+}
+
+[data-theme="light"] .toast {
+    box-shadow: 0 10px 28px rgba(37, 99, 235, 0.14),
+        inset 0 1px 0 rgba(255, 255, 255, 0.96);
 }
 
 .toast.show {
-    transform: translate3d(var(--toast-x-end, 0px), var(--toast-y, 0px), 0) scaleX(1) scaleY(1);
+    transform: translate3d(var(--toast-x-end, 0px), var(--toast-y, 0px), 0);
     opacity: 1;
 }
 
+.toast-icon-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.toast-content-wrapper {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.toast-content-wrapper.has-overflow {
+    mask-image: linear-gradient(to right, transparent 0, black 10px, black calc(100% - 14px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, transparent 0, black 10px, black calc(100% - 14px), transparent 100%);
+}
+
+.toast-message-text {
+    white-space: nowrap;
+    display: inline-block;
+    will-change: transform;
+}
+
+.toast-message-text.toast-marquee {
+    animation: toastMarqueeScroll var(--toast-marquee-duration, 4.5s) cubic-bezier(0.37, 0, 0.63, 1) infinite;
+}
+
+@keyframes toastMarqueeScroll {
+
+    0%,
+    18% {
+        transform: translate3d(0, 0, 0);
+    }
+
+    55%,
+    78% {
+        transform: translate3d(var(--toast-marquee-dist, -60px), 0, 0);
+    }
+
+    94%,
+    100% {
+        transform: translate3d(0, 0, 0);
+    }
+}
+
+
+/* ─── ANIMACIÓN TOAST: slide simple desde el dock ─── */
+
+/* Sin pseudo-element bridge. El dock (z:61000) cubre al toast (z:60000)
+   al inicio, dando la ilusión de que emerge de dentro del dock. */
 .toast::before {
-    content: '';
-    position: absolute;
-    left: calc(-1 * var(--toast-link-width, 120px) + 8px);
-    top: 50%;
-    width: var(--toast-link-width, 120px);
-    height: 66%;
-    transform: translateY(-50%) scaleX(0.55);
-    border-radius: 999px 30px 30px 999px;
-    background: linear-gradient(90deg,
-            rgba(255, 255, 255, 0.08) 0%,
-            rgba(255, 255, 255, 0.04) 32%,
-            rgba(255, 255, 255, 0.02) 100%);
-    filter: blur(0.2px);
-    opacity: 0;
-    pointer-events: none;
-    transform-origin: right center;
-    z-index: -1;
+    display: none;
 }
 
-.toast::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    pointer-events: none;
-    background: linear-gradient(130deg,
-            rgba(255, 255, 255, 0.18),
-            rgba(255, 255, 255, 0.03) 42%,
-            rgba(255, 255, 255, 0.01) 100%);
-    opacity: 0.58;
-}
-
+/* Entrada: fade + deslizamiento desde detrás del dock */
 .toast[data-toast-state="enter"] {
-    animation: toastLiquidDetach 980ms cubic-bezier(0.22, 1, 0.36, 1);
+    animation: toastSlideIn 340ms cubic-bezier(0.34, 1.04, 0.64, 1) both;
 }
 
-.toast[data-toast-state="enter"]::before {
-    animation: toastBridgeDetach 980ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
+/* Salida: regresa detrás del dock */
 .toast[data-toast-state="exit"] {
-    animation: toastLiquidMerge 840ms cubic-bezier(0.32, 0.02, 0.17, 1);
+    animation: toastSlideOut 260ms cubic-bezier(0.4, 0, 1, 1) both;
 }
 
-.toast[data-toast-state="exit"]::before {
-    animation: toastBridgeMerge 840ms cubic-bezier(0.32, 0.02, 0.17, 1);
-}
-
-@keyframes toastLiquidDetach {
-    0% {
-        border-radius: 24px;
-        clip-path: inset(0 92% 0 0 round 24px);
-    }
-
-    40% {
-        border-radius: 18px 24px 24px 18px;
-        clip-path: inset(0 28% 0 0 round 22px);
-    }
-
-    100% {
-        border-radius: 16px;
-        clip-path: inset(0 0 0 0 round 16px);
-    }
-}
-
-@keyframes toastLiquidMerge {
-    0% {
-        border-radius: 16px;
-        clip-path: inset(0 0 0 0 round 16px);
-    }
-
-    45% {
-        border-radius: 22px 14px 14px 22px;
-        clip-path: inset(0 40% 0 0 round 20px);
-    }
-
-    100% {
-        border-radius: 24px;
-        clip-path: inset(0 92% 0 0 round 24px);
-    }
-}
-
-@keyframes toastBridgeDetach {
-    0% {
-        opacity: 0.95;
-        transform: translateY(-50%) scaleX(1);
-    }
-
-    62% {
-        opacity: 0.82;
-        transform: translateY(-50%) scaleX(0.62);
-    }
-
-    100% {
-        opacity: 0;
-        transform: translateY(-50%) scaleX(0.08);
-    }
-}
-
-@keyframes toastBridgeMerge {
-    0% {
-        opacity: 0;
-        transform: translateY(-50%) scaleX(0.08);
-    }
-
-    48% {
-        opacity: 0.82;
-        transform: translateY(-50%) scaleX(0.64);
-    }
-
-    100% {
-        opacity: 0.94;
-        transform: translateY(-50%) scaleX(1);
-    }
-}
-
-/* ============================
-           TOAST IZQUIERDA
-        ============================ */
+/* ─── TOAST IZQUIERDA (LOADING) ─── */
 .toast.toast-left {
-    transform-origin: right center;
-}
-
-.toast.toast-left::before {
-    left: auto;
-    right: calc(-1 * var(--toast-link-width, 120px) + 8px);
-    border-radius: 30px 999px 999px 30px;
-    transform-origin: right center;
+    height: auto;
+    min-height: 52px;
 }
 
 .toast.toast-left.toast-loading {
@@ -1277,6 +1285,18 @@ button.config-item-button:active {
     padding: 12px 18px;
 }
 
+/* La animación izquierda es la misma — usa las mismas variables CSS */
+.toast.toast-left[data-toast-state="enter"] {
+    animation: toastSlideIn 340ms cubic-bezier(0.34, 1.04, 0.64, 1) both;
+}
+
+.toast.toast-left[data-toast-state="exit"] {
+    animation: toastSlideOut 260ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+/* =======================================================
+   LOADING BAR DEL TOAST
+   ======================================================= */
 .toast-loading-bar {
     width: 220px;
     max-width: 62vw;
@@ -1313,139 +1333,47 @@ button.config-item-button:active {
     }
 }
 
-.toast.toast-left[data-toast-state="enter"] {
-    animation: toastLiquidDetachLeft 980ms cubic-bezier(0.22, 1, 0.36, 1);
-}
+/* =======================================================
+   ANIMACIONES DEL TOAST: SLIDE LIMPIO
+   El dock tiene z-index:61000 y el toast z-index:60000.
+   El toast arranca en startX (dentro del dock) y desliza
+   a endX (afuera). El dock lo cubre al inicio y al final,
+   creando la ilusión de que emerge/entra en el dock.
+   ======================================================= */
 
-.toast.toast-left[data-toast-state="exit"] {
-    animation: toastLiquidMergeLeft 840ms cubic-bezier(0.32, 0.02, 0.17, 1);
-}
-
-@keyframes toastLiquidDetachLeft {
+/* Entrada — slide desde detrás del dock hacia afuera */
+@keyframes toastSlideIn {
     0% {
-        border-radius: 24px;
-        clip-path: inset(0 0 0 92% round 24px);
-    }
-
-    40% {
-        border-radius: 18px 24px 24px 18px;
-        clip-path: inset(0 0 0 28% round 22px);
+        opacity: 0;
+        transform: translate3d(var(--toast-x-start, 0px), var(--toast-y, 0px), 0);
     }
 
     100% {
-        border-radius: 16px;
-        clip-path: inset(0 0 0 0 round 16px);
+        opacity: 1;
+        transform: translate3d(var(--toast-x-end, 0px), var(--toast-y, 0px), 0);
     }
 }
 
-@keyframes toastLiquidMergeLeft {
+/* Salida — regresa detrás del dock */
+@keyframes toastSlideOut {
     0% {
-        border-radius: 16px;
-        clip-path: inset(0 0 0 0 round 16px);
-    }
-
-    45% {
-        border-radius: 22px 14px 14px 22px;
-        clip-path: inset(0 0 0 40% round 20px);
+        opacity: 1;
+        transform: translate3d(var(--toast-x-end, 0px), var(--toast-y, 0px), 0);
     }
 
     100% {
-        border-radius: 24px;
-        clip-path: inset(0 0 0 92% round 24px);
-    }
-}
-
-@keyframes dockCoreSplit {
-    0% {
-        padding-right: 14px;
-        border-top-right-radius: 24px;
-        border-bottom-right-radius: 24px;
-    }
-
-    40% {
-        padding-right: 24px;
-        border-top-right-radius: 16px;
-        border-bottom-right-radius: 16px;
-    }
-
-    100% {
-        padding-right: 14px;
-        border-top-right-radius: 24px;
-        border-bottom-right-radius: 24px;
-    }
-}
-
-@keyframes dockCoreMerge {
-    0% {
-        padding-right: 14px;
-        border-top-right-radius: 24px;
-        border-bottom-right-radius: 24px;
-    }
-
-    45% {
-        padding-right: 24px;
-        border-top-right-radius: 16px;
-        border-bottom-right-radius: 16px;
-    }
-
-    100% {
-        padding-right: 14px;
-        border-top-right-radius: 24px;
-        border-bottom-right-radius: 24px;
-    }
-}
-
-@keyframes dockCoreSplitLeft {
-    0% {
-        padding-left: 14px;
-        border-top-left-radius: 24px;
-        border-bottom-left-radius: 24px;
-    }
-
-    40% {
-        padding-left: 24px;
-        border-top-left-radius: 16px;
-        border-bottom-left-radius: 16px;
-    }
-
-    100% {
-        padding-left: 14px;
-        border-top-left-radius: 24px;
-        border-bottom-left-radius: 24px;
-    }
-}
-
-@keyframes dockCoreMergeLeft {
-    0% {
-        padding-left: 14px;
-        border-top-left-radius: 24px;
-        border-bottom-left-radius: 24px;
-    }
-
-    45% {
-        padding-left: 24px;
-        border-top-left-radius: 16px;
-        border-bottom-left-radius: 16px;
-    }
-
-    100% {
-        padding-left: 14px;
-        border-top-left-radius: 24px;
-        border-bottom-left-radius: 24px;
+        opacity: 0;
+        transform: translate3d(var(--toast-x-start, 0px), var(--toast-y, 0px), 0);
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .toast {
-        transition: opacity 0.2s ease;
-        transform: translate3d(var(--toast-x-end, 0px), var(--toast-y, 0px), 0) scale(1);
-    }
-
-    .toast::before,
-    .toast::after {
-        animation: none !important;
+    .toast[data-toast-state] {
+        animation-duration: 0.01ms !important;
     }
 }
+
+
 
 /* ============================
            CARD PERSONAL
@@ -3938,6 +3866,7 @@ html[data-theme="light"] #dbStatusIcon {
         transform: scale(0.88) translateY(16px);
         opacity: 0;
     }
+
     to {
         transform: scale(1) translateY(0);
         opacity: 1;
@@ -4032,10 +3961,22 @@ html[data-theme="light"] #dbStatusIcon {
     max-height: calc(100vh - 180px);
 }
 
-.notif-list-container::-webkit-scrollbar { width: 3px; }
-.notif-list-container::-webkit-scrollbar-track { background: transparent; }
-.notif-list-container::-webkit-scrollbar-thumb { background: rgba(130,100,255,0.25); border-radius: 10px; }
-.notif-list-container::-webkit-scrollbar-thumb:hover { background: rgba(130,100,255,0.45); }
+.notif-list-container::-webkit-scrollbar {
+    width: 3px;
+}
+
+.notif-list-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.notif-list-container::-webkit-scrollbar-thumb {
+    background: rgba(130, 100, 255, 0.25);
+    border-radius: 10px;
+}
+
+.notif-list-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(130, 100, 255, 0.45);
+}
 
 /* Estado vacío */
 .notif-empty-state {
@@ -4126,18 +4067,22 @@ html[data-theme="light"] #dbStatusIcon {
     border-left: 2.5px solid #f59e0b !important;
     box-shadow: -2px 0 12px rgba(245, 158, 11, 0.15);
 }
+
 .notif-item-wrapper.notif-type-desbloqueo {
     border-left: 2.5px solid #10b981 !important;
     box-shadow: -2px 0 12px rgba(16, 185, 129, 0.15);
 }
+
 .notif-item-wrapper.notif-type-bloqueo {
     border-left: 2.5px solid #ef4444 !important;
     box-shadow: -2px 0 12px rgba(239, 68, 68, 0.15);
 }
+
 .notif-item-wrapper.notif-type-registro {
     border-left: 2.5px solid #a855f7 !important;
     box-shadow: -2px 0 12px rgba(168, 85, 247, 0.15);
 }
+
 .notif-item-wrapper.notif-type-default {
     border-left: 2.5px solid #06b6d4 !important;
     box-shadow: -2px 0 12px rgba(6, 182, 212, 0.12);
@@ -4149,21 +4094,25 @@ html[data-theme="light"] #dbStatusIcon {
     border-color: rgba(245, 158, 11, 0.25) !important;
     color: #f59e0b !important;
 }
+
 .notif-item-wrapper.notif-type-desbloqueo .notif-icon-circle {
     background: rgba(16, 185, 129, 0.1) !important;
     border-color: rgba(16, 185, 129, 0.22) !important;
     color: #10b981 !important;
 }
+
 .notif-item-wrapper.notif-type-bloqueo .notif-icon-circle {
     background: rgba(239, 68, 68, 0.1) !important;
     border-color: rgba(239, 68, 68, 0.22) !important;
     color: #ef4444 !important;
 }
+
 .notif-item-wrapper.notif-type-registro .notif-icon-circle {
     background: rgba(168, 85, 247, 0.1) !important;
     border-color: rgba(168, 85, 247, 0.22) !important;
     color: #a855f7 !important;
 }
+
 .notif-item-wrapper.notif-type-default .notif-icon-circle {
     background: rgba(6, 182, 212, 0.1) !important;
     border-color: rgba(6, 182, 212, 0.22) !important;
@@ -4225,6 +4174,7 @@ html[data-theme="light"] #dbStatusIcon {
         transform: scale(0.9);
         box-shadow: 0 0 4px #ef4444;
     }
+
     100% {
         transform: scale(1.15);
         box-shadow: 0 0 10px #ef4444, 0 0 20px rgba(239, 68, 68, 0.4);
@@ -4640,11 +4590,15 @@ screen and (min-resolution: 120dpi) {
 
 /* ── Config overlay: Modo Claro Moderno ── */
 [data-theme="light"] #configOverlay {
+    background: transparent !important;
+}
+
+[data-theme="light"] #configOverlay::before {
     background: rgba(15, 23, 42, 0.35) !important;
 }
 
 [data-theme="light"] #configOverlay .config-popover-panel {
-    background: rgba(255, 255, 255, 0.95) !important;
+    background: rgba(255, 255, 255, 0.98) !important;
     border-color: rgba(0, 0, 0, 0.08) !important;
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.15), 0 4px 16px rgba(0, 0, 0, 0.05) !important;
 }
@@ -4660,6 +4614,14 @@ screen and (min-resolution: 120dpi) {
 
 [data-theme="light"] .config-header-card #profileUserEmail {
     color: #64748b !important;
+}
+
+[data-theme="light"] .config-avatar-ring {
+    box-shadow: 0 0 0 0px transparent;
+}
+
+[data-theme="light"] .config-avatar-inner {
+    background: #f1f5f9 !important;
 }
 
 [data-theme="light"] .config-section-title {
@@ -5175,6 +5137,7 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
     from {
         transform: translate(-50%, -50%) rotate(0deg);
     }
+
     to {
         transform: translate(-50%, -50%) rotate(360deg);
     }
@@ -5186,6 +5149,7 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
         transform: scale(0.93);
         filter: blur(2px);
     }
+
     100% {
         opacity: 1;
         transform: scale(1);
@@ -5194,11 +5158,14 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
 }
 
 @keyframes recSoftPulse {
-    0%, 100% {
+
+    0%,
+    100% {
         opacity: 1;
         transform: scale(1);
         box-shadow: 0 0 6px #f43f5e;
     }
+
     50% {
         opacity: 0.35;
         transform: scale(0.75);
@@ -5242,12 +5209,15 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
     color: #e0f2fe;
     box-shadow: 0 0 14px rgba(0, 243, 255, 0.3), inset 0 0 6px rgba(0, 243, 255, 0.15);
 }
+
 .badge-glow-consultando::after {
     background: rgba(8, 20, 35, 0.94);
 }
+
 [data-theme="light"] .badge-glow-consultando::after {
     background: rgba(240, 249, 255, 0.96);
 }
+
 [data-theme="light"] .badge-glow-consultando {
     color: #0369a1;
 }
@@ -5260,16 +5230,14 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
     width: 500%;
     height: 500%;
     transform: translate(-50%, -50%);
-    background: conic-gradient(
-        from 0deg,
-        transparent 0deg,
-        transparent 300deg,
-        rgba(0, 243, 255, 0.15) 315deg,
-        rgba(0, 243, 255, 0.8) 345deg,
-        rgba(255, 255, 255, 0.95) 352deg,
-        rgba(0, 243, 255, 0.8) 358deg,
-        rgba(0, 243, 255, 0.15) 360deg
-    );
+    background: conic-gradient(from 0deg,
+            transparent 0deg,
+            transparent 300deg,
+            rgba(0, 243, 255, 0.15) 315deg,
+            rgba(0, 243, 255, 0.8) 345deg,
+            rgba(255, 255, 255, 0.95) 352deg,
+            rgba(0, 243, 255, 0.8) 358deg,
+            rgba(0, 243, 255, 0.15) 360deg);
     animation: rotateClockwise 2.2s linear infinite;
     z-index: -2;
 }
@@ -5287,12 +5255,15 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
     color: #fff1f2;
     box-shadow: 0 0 14px rgba(244, 63, 94, 0.35), inset 0 0 6px rgba(244, 63, 94, 0.15);
 }
+
 .badge-glow-captura::after {
     background: rgba(36, 12, 22, 0.94);
 }
+
 [data-theme="light"] .badge-glow-captura::after {
     background: rgba(255, 241, 242, 0.96);
 }
+
 [data-theme="light"] .badge-glow-captura {
     color: #be123c;
 }
@@ -5305,16 +5276,14 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
     width: 500%;
     height: 500%;
     transform: translate(-50%, -50%);
-    background: conic-gradient(
-        from 0deg,
-        transparent 0deg,
-        transparent 300deg,
-        rgba(244, 63, 94, 0.15) 315deg,
-        rgba(244, 63, 94, 0.8) 345deg,
-        rgba(255, 255, 255, 0.95) 352deg,
-        rgba(244, 63, 94, 0.8) 358deg,
-        rgba(244, 63, 94, 0.15) 360deg
-    );
+    background: conic-gradient(from 0deg,
+            transparent 0deg,
+            transparent 300deg,
+            rgba(244, 63, 94, 0.15) 315deg,
+            rgba(244, 63, 94, 0.8) 345deg,
+            rgba(255, 255, 255, 0.95) 352deg,
+            rgba(244, 63, 94, 0.8) 358deg,
+            rgba(244, 63, 94, 0.15) 360deg);
     animation: rotateClockwise 2s linear infinite;
     z-index: -2;
 }
@@ -5335,12 +5304,15 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
     color: #faf5ff;
     box-shadow: 0 0 14px rgba(168, 85, 247, 0.35), inset 0 0 6px rgba(168, 85, 247, 0.15);
 }
+
 .badge-glow-modelo::after {
     background: rgba(26, 12, 40, 0.94);
 }
+
 [data-theme="light"] .badge-glow-modelo::after {
     background: rgba(250, 245, 255, 0.96);
 }
+
 [data-theme="light"] .badge-glow-modelo {
     color: #7e22ce;
 }
@@ -5353,16 +5325,14 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
     width: 500%;
     height: 500%;
     transform: translate(-50%, -50%);
-    background: conic-gradient(
-        from 0deg,
-        transparent 0deg,
-        transparent 300deg,
-        rgba(168, 85, 247, 0.15) 315deg,
-        rgba(168, 85, 247, 0.8) 345deg,
-        rgba(255, 255, 255, 0.95) 352deg,
-        rgba(168, 85, 247, 0.8) 358deg,
-        rgba(168, 85, 247, 0.15) 360deg
-    );
+    background: conic-gradient(from 0deg,
+            transparent 0deg,
+            transparent 300deg,
+            rgba(168, 85, 247, 0.15) 315deg,
+            rgba(168, 85, 247, 0.8) 345deg,
+            rgba(255, 255, 255, 0.95) 352deg,
+            rgba(168, 85, 247, 0.8) 358deg,
+            rgba(168, 85, 247, 0.15) 360deg);
     animation: rotateClockwise 2.2s linear infinite;
     z-index: -2;
 }
@@ -5398,7 +5368,7 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
     border: none !important;
 }
 
-.ios-stack-tr > td {
+.ios-stack-tr>td {
     padding: 6px 16px 16px 16px !important;
     border: none !important;
     background: transparent !important;
@@ -5426,9 +5396,10 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
     backdrop-filter: blur(6px);
     z-index: 1;
     transition: transform 0.42s cubic-bezier(0.16, 1, 0.3, 1),
-                opacity  0.42s cubic-bezier(0.16, 1, 0.3, 1);
+        opacity 0.42s cubic-bezier(0.16, 1, 0.3, 1);
     pointer-events: none;
 }
+
 [data-theme="light"] .ios-stack-peek-bottom {
     background: rgba(0, 0, 0, 0.025);
     border-color: rgba(0, 0, 0, 0.05);
@@ -5447,9 +5418,10 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
     backdrop-filter: blur(8px);
     z-index: 2;
     transition: transform 0.38s cubic-bezier(0.16, 1, 0.3, 1),
-                opacity  0.38s cubic-bezier(0.16, 1, 0.3, 1);
+        opacity 0.38s cubic-bezier(0.16, 1, 0.3, 1);
     pointer-events: none;
 }
+
 [data-theme="light"] .ios-stack-peek-mid {
     background: rgba(0, 0, 0, 0.04);
     border-color: rgba(0, 0, 0, 0.07);
@@ -5469,19 +5441,20 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
     border: 1px solid rgba(255, 255, 255, 0.055);
     border-left: 2px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.28),
-                inset 0 1px 0 rgba(255, 255, 255, 0.03);
+        inset 0 1px 0 rgba(255, 255, 255, 0.03);
     backdrop-filter: blur(18px);
-    transition: transform  0.3s cubic-bezier(0.16, 1, 0.3, 1),
-                box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1),
-                border-color 0.3s ease;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+        box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+        border-color 0.3s ease;
     will-change: transform;
 }
+
 [data-theme="light"] .ios-stack-top-card {
     background: rgba(245, 247, 250, 0.92);
     border: 1px solid rgba(0, 0, 0, 0.07);
     border-left: 2px solid rgba(0, 0, 0, 0.12);
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06),
-                inset 0 1px 0 rgba(255, 255, 255, 0.7);
+        inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 /* Hover: only the top card lifts — peeks follow slightly */
@@ -5489,11 +5462,13 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
     transform: translateY(-2px);
     border-left-color: rgba(0, 200, 220, 0.5);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.32),
-                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
+
 .ios-stack-wrapper:hover .ios-stack-peek-mid {
     transform: translateY(-1px);
 }
+
 .ios-stack-wrapper:hover .ios-stack-peek-bottom {
     transform: translateY(-0.5px);
 }
@@ -5502,6 +5477,7 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
 .ios-subrow {
     transition: background 0.2s ease;
 }
+
 .ios-subrow.hidden {
     display: none !important;
 }
@@ -5512,6 +5488,7 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
         transform: translateY(-10px);
         clip-path: inset(0 0 100% 0 round 4px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -5533,6 +5510,7 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
         transform: translateY(8px);
         filter: blur(3px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -5571,6 +5549,7 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
     border-color: rgba(239, 68, 68, 0.25);
     background: rgba(239, 68, 68, 0.06);
 }
+
 .pago-toggle-btn.pago-no:hover {
     background: rgba(239, 68, 68, 0.14);
     border-color: rgba(239, 68, 68, 0.5);
@@ -5584,6 +5563,7 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
     border-color: rgba(34, 197, 94, 0.3);
     background: rgba(34, 197, 94, 0.08);
 }
+
 .pago-toggle-btn.pago-si:hover {
     background: rgba(34, 197, 94, 0.16);
     border-color: rgba(34, 197, 94, 0.55);
@@ -5603,6 +5583,7 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
     border-color: rgba(220, 38, 38, 0.35);
     background: rgba(220, 38, 38, 0.06);
 }
+
 [data-theme="light"] .pago-toggle-btn.pago-si {
     color: #16a34a;
     border-color: rgba(22, 163, 74, 0.35);
@@ -5619,21 +5600,21 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
     border-bottom: 1px solid rgba(99, 179, 237, 0.07) !important;
 }
 
-.lote-header-tr > td {
+.lote-header-tr>td {
     padding: 7px 8px !important;
     background: transparent !important;
     border: none !important;
     vertical-align: middle;
 }
 
-.lote-header-tr:hover > td {
+.lote-header-tr:hover>td {
     background: rgba(99, 179, 237, 0.03) !important;
 }
 
 .lote-header-tr .group-arrow-btn {
     transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-                background 0.2s ease,
-                box-shadow 0.2s ease !important;
+        background 0.2s ease,
+        box-shadow 0.2s ease !important;
 }
 
 .lote-header-tr .group-arrow-btn:hover {
@@ -5675,13 +5656,15 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
 .card-cliente::before {
     content: '';
     position: absolute;
-    top: 0; left: 0; right: 0;
+    top: 0;
+    left: 0;
+    right: 0;
     height: 1px;
     background: linear-gradient(90deg,
-        transparent,
-        rgba(0, 243, 255, 0.3) 40%,
-        rgba(168, 85, 247, 0.3) 60%,
-        transparent);
+            transparent,
+            rgba(0, 243, 255, 0.3) 40%,
+            rgba(168, 85, 247, 0.3) 60%,
+            transparent);
     opacity: 0;
     transition: opacity 0.3s ease;
 }
@@ -5937,14 +5920,37 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
 }
 
 /* Avatar gradient helpers para clientes */
-.cl-av-0 { background: linear-gradient(135deg, #00f3ff, #a855f7); }
-.cl-av-1 { background: linear-gradient(135deg, #10b981, #00f3ff); }
-.cl-av-2 { background: linear-gradient(135deg, #f59e0b, #ef4444); }
-.cl-av-3 { background: linear-gradient(135deg, #6366f1, #a855f7); }
-.cl-av-4 { background: linear-gradient(135deg, #0ea5e9, #6366f1); }
-.cl-av-5 { background: linear-gradient(135deg, #ec4899, #a855f7); }
-.cl-av-6 { background: linear-gradient(135deg, #14b8a6, #0ea5e9); }
-.cl-av-7 { background: linear-gradient(135deg, #f97316, #ec4899); }
+.cl-av-0 {
+    background: linear-gradient(135deg, #00f3ff, #a855f7);
+}
+
+.cl-av-1 {
+    background: linear-gradient(135deg, #10b981, #00f3ff);
+}
+
+.cl-av-2 {
+    background: linear-gradient(135deg, #f59e0b, #ef4444);
+}
+
+.cl-av-3 {
+    background: linear-gradient(135deg, #6366f1, #a855f7);
+}
+
+.cl-av-4 {
+    background: linear-gradient(135deg, #0ea5e9, #6366f1);
+}
+
+.cl-av-5 {
+    background: linear-gradient(135deg, #ec4899, #a855f7);
+}
+
+.cl-av-6 {
+    background: linear-gradient(135deg, #14b8a6, #0ea5e9);
+}
+
+.cl-av-7 {
+    background: linear-gradient(135deg, #f97316, #ec4899);
+}
 
 /* Panel hideAdmin mejorado */
 #hideAdminOverlay .liquid-glass {

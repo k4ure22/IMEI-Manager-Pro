@@ -142,7 +142,7 @@ def main():
                 if not resultado_capturado:
                     driver.save_screenshot(ruta_pantallazo)
             except Exception as e_ss:
-                print(f"⚠️ Error capturando pantalla ETB: {e_ss}", file=sys.stderr)
+                print(f"[WARN] Error capturando pantalla ETB: {e_ss}", file=sys.stderr)
 
     except Exception as e:
         estado_final = "error"
@@ -182,7 +182,7 @@ def main():
                             datos_estilo[k] = v
                 estilitar_res = estilizar_pantallazo(ruta_pantallazo, datos_estilo)
             except Exception as e_est:
-                print(f"⚠️ Error estilizando comprobante ETB: {e_est}", file=sys.stderr)
+                print(f"[WARN] Error estilizando comprobante ETB: {e_est}", file=sys.stderr)
 
         res_payload = {"status": estado_final, "mensaje": mensaje_final}
         if ruta_pantallazo and os.path.exists(ruta_pantallazo):

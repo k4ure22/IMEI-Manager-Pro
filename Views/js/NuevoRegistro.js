@@ -70,7 +70,7 @@ function nrValidarFormulario() {
     const listo = mensajes.length === 0;
 
     if (dot) { dot.className = 'nr-status-dot ' + (listo ? 'ready' : (mensajes.length <= 2 ? 'warning' : '')); }
-    if (txt) { txt.innerText = listo ? '✓ Listo para guardar' : 'Falta: ' + mensajes.join(', '); }
+    if (txt) { txt.innerText = listo ? 'Listo para guardar' : 'Falta: ' + mensajes.join(', '); }
     if (submitBtn) {
         submitBtn.classList.toggle('ready', listo);
     }

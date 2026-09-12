@@ -27,7 +27,7 @@ ruta_tesseract = next((r for r in posibles_rutas if os.path.exists(r)), shutil.w
 if ruta_tesseract:
     pytesseract.pytesseract.tesseract_cmd = ruta_tesseract
 else:
-    print("❌ ERROR: Tesseract no encontrado. Instálalo con 'brew install tesseract' en Mac o su instalador en Windows")
+    print("[ERROR] ERROR: Tesseract no encontrado. Instálalo con 'brew install tesseract' en Mac o su instalador en Windows")
 def generar_acronimo(texto):
     if not texto: return "DESC" 
     palabras = str(texto).split()
@@ -156,7 +156,7 @@ def main():
         os.makedirs(pantallazos_dir, exist_ok=True)
         
     except Exception as e:
-        print(f"❌ Error: No se pudo conectar a Excel. Asegúrate de tenerlo abierto. Detalles: {e}")
+        print(f"[ERROR] Error: No se pudo conectar a Excel. Asegúrate de tenerlo abierto. Detalles: {e}")
         return
     celda_activa = app.selection
     fila = celda_activa.row
@@ -166,25 +166,25 @@ def main():
     modelo_val = sheet.range((fila, COLUMNA_MODELO)).value
     
     if not imei_val:
-        print("❌ Error: La celda del IMEI está vacía.")
+        print("[ERROR] Error: La celda del IMEI está vacía.")
         return
         
     imei_str = str(int(imei_val)) if isinstance(imei_val, (int, float)) else str(imei_val).strip()
     acronimo = generar_acronimo(modelo_val)
     nombre_archivo = f"{imei_str}_{acronimo}.png"
     ruta_guardado = os.path.join(pantallazos_dir, nombre_archivo)
-    print(f"🔎 Procesando IMEI: {imei_str} | Modelo: {modelo_val} ({acronimo})")
-    print(f"📂 El pantallazo se guardará en: {ruta_guardado}")
+    print(f"[PROCESO] Procesando IMEI: {imei_str} | Modelo: {modelo_val} ({acronimo})")
+    print(f"[RUTA] El pantallazo se guardará en: {ruta_guardado}")
     scraper = IMEIScraper()
     
     try:
         exito = scraper.consultar_y_capturar(imei_str, ruta_guardado)
         if exito:
-            print(f"✅ Pantallazo guardado exitosamente: {nombre_archivo}")
+            print(f"[OK] Pantallazo guardado exitosamente: {nombre_archivo}")
         else:
-            print(f"❌ No se pudo capturar el pantallazo para el IMEI {imei_str}")
+            print(f"[ERROR] No se pudo capturar el pantallazo para el IMEI {imei_str}")
     except Exception as e:
-        print(f"❌ Error en ejecución: {e}")
+        print(f"[ERROR] Error en ejecución: {e}")
     finally:
         scraper.close()
             

@@ -50,7 +50,7 @@ def estilizar_pantallazo(screenshot_path: str, datos: dict) -> str:
     try:
         raw_img = Image.open(screenshot_path).convert("RGBA")
     except Exception as e:
-        print(f"⚠️ Error abriendo imagen para estilizar: {e}")
+        print(f"[WARN] Error abriendo imagen para estilizar: {e}")
         return screenshot_path
 
     # Autotrim de márgenes transparentes/blancos excesivos
@@ -113,15 +113,15 @@ def estilizar_pantallazo(screenshot_path: str, datos: dict) -> str:
     # Estado Badge
     est_lower = estado.lower()
     if any(k in est_lower for k in ["éxito", "exitoso", "registrado", "success", "ok", "completado"]):
-        status_text = "✓ REGISTRADO EXITOSAMENTE"
+        status_text = "REGISTRADO EXITOSAMENTE"
         status_fg = (21, 128, 61, 255)
         status_bg = (220, 252, 231, 255)
     elif any(k in est_lower for k in ["error", "fallo", "blacklist", "bloqueado"]):
-        status_text = "❌ REGISTRO RECHAZADO"
+        status_text = "REGISTRO RECHAZADO"
         status_fg = (185, 28, 28, 255)
         status_bg = (254, 226, 226, 255)
     else:
-        status_text = f"ℹ️ {estado.upper()}"
+        status_text = f"{estado.upper()}"
         status_fg = (30, 58, 138, 255)
         status_bg = (219, 234, 254, 255)
 
