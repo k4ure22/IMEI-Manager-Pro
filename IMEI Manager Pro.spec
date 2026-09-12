@@ -9,6 +9,11 @@ def _safe_copyfile(src, dst, *args, **kwargs):
     return _orig_copyfile(src, dst, *args, **kwargs)
 shutil.copyfile = _safe_copyfile
 
+from PyInstaller.utils.hooks import collect_all
+
+selenium_datas, selenium_binaries, selenium_hidden = collect_all('selenium')
+wdm_datas, wdm_binaries, wdm_hidden = collect_all('webdriver_manager')
+
 # Archivos y carpetas adicionales que deben ser empaquetados (sin archivos .py sueltos para proteger el código fuente)
 mis_datas = [
     ('Views', 'Views'),
@@ -16,7 +21,7 @@ mis_datas = [
     ('logoIMPlight.png', '.'),
     ('logoIMPdark.png', '.'),
     ('logoIMPlight.icns', '.'),
-]
+] + selenium_datas + wdm_datas
 
 scripts_to_analyze = [
     'Controllers/main.py',
@@ -71,9 +76,21 @@ hidden_imports = [
     'cv2',
     'pytesseract',
     'selenium',
+    'selenium.webdriver',
+    'selenium.webdriver.chrome',
     'selenium.webdriver.chrome.service',
+    'selenium.webdriver.chrome.options',
+    'selenium.webdriver.chrome.webdriver',
+    'selenium.webdriver.common',
+    'selenium.webdriver.common.by',
+    'selenium.webdriver.common.keys',
+    'selenium.webdriver.support',
+    'selenium.webdriver.support.ui',
+    'selenium.webdriver.support.expected_conditions',
+    'selenium.webdriver.support.select',
     'webdriver_manager',
     'webdriver_manager.chrome',
+    'webdriver_manager.core',
     'supabase',
     'postgrest',
     'gotrue',
@@ -85,10 +102,10 @@ hidden_imports = [
     # unittest es requerido por pyparsing (dependencia transitiva de supabase/storage3)
     'unittest',
     'unittest.mock',
-]
+] + selenium_hidden + wdm_hidden
 
 chromedriver_bin = 'chromedriver'
-mis_binaries = []
+mis_binaries = [] + selenium_binaries + wdm_binaries
 if os.path.exists(chromedriver_bin):
     mis_binaries.append((chromedriver_bin, '.'))
 

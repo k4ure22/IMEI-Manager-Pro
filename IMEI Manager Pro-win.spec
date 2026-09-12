@@ -4,13 +4,18 @@
 import os
 import sys
 
+from PyInstaller.utils.hooks import collect_all
+
+selenium_datas, selenium_binaries, selenium_hidden = collect_all('selenium')
+wdm_datas, wdm_binaries, wdm_hidden = collect_all('webdriver_manager')
+
 # Archivos y carpetas adicionales empaquetados (sin archivos .py sueltos para proteger el código fuente)
 mis_datas = [
     ('Views', 'Views'),
     ('Controllers/logoIMPlight.ico', 'Controllers'),
     ('logoIMPlight.png', '.'),
     ('logoIMPdark.png', '.'),
-]
+] + selenium_datas + wdm_datas
 
 if os.path.exists('Models'):
     mis_datas.append(('Models', 'Models'))
@@ -70,9 +75,21 @@ hidden_imports = [
     'cv2',
     'pytesseract',
     'selenium',
+    'selenium.webdriver',
+    'selenium.webdriver.chrome',
     'selenium.webdriver.chrome.service',
+    'selenium.webdriver.chrome.options',
+    'selenium.webdriver.chrome.webdriver',
+    'selenium.webdriver.common',
+    'selenium.webdriver.common.by',
+    'selenium.webdriver.common.keys',
+    'selenium.webdriver.support',
+    'selenium.webdriver.support.ui',
+    'selenium.webdriver.support.expected_conditions',
+    'selenium.webdriver.support.select',
     'webdriver_manager',
     'webdriver_manager.chrome',
+    'webdriver_manager.core',
     'supabase',
     'postgrest',
     'gotrue',
@@ -82,10 +99,10 @@ hidden_imports = [
     'certifi',
     'xlwings',
     'ctypes'
-]
+] + selenium_hidden + wdm_hidden
 
 chromedriver_bin = 'chromedriver.exe'
-mis_binaries = []
+mis_binaries = [] + selenium_binaries + wdm_binaries
 if os.path.exists(chromedriver_bin):
     mis_binaries.append((chromedriver_bin, '.'))
 
