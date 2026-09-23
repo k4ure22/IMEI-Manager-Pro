@@ -82,14 +82,16 @@ import platform
 import subprocess
 
 def abrir_archivo(ruta):
-    sistema = platform.system()
+    if not ruta:
+        return
     try:
-        if sistema == "Windows":
-            os.startfile(ruta)
-        elif sistema == "Darwin": # macOS
-            subprocess.Popen(["open", ruta])
+        ruta_norm = os.path.normpath(ruta)
+        if sys.platform == "win32":
+            os.startfile(ruta_norm)
+        elif sys.platform == "darwin": # macOS
+            subprocess.Popen(["open", ruta_norm])
         else: # Linux
-            subprocess.Popen(["xdg-open", ruta])
+            subprocess.Popen(["xdg-open", ruta_norm])
     except Exception as e:
         print(f"Error al abrir el archivo {ruta}: {e}")
 # Configuración de SSL segura
@@ -213,13 +215,16 @@ except ImportError:
 
 def abrir_archivo(ruta):
     """Abre un archivo con la aplicación predeterminada del sistema de forma multiplataforma."""
+    if not ruta:
+        return
     try:
+        ruta_norm = os.path.normpath(ruta)
         if sys.platform == "win32":
-            os.startfile(ruta)
+            os.startfile(ruta_norm)
         elif sys.platform == "darwin":
-            subprocess.Popen(["open", ruta])
+            subprocess.Popen(["open", ruta_norm])
         else:
-            subprocess.Popen(["xdg-open", ruta])
+            subprocess.Popen(["xdg-open", ruta_norm])
     except Exception as e:
         print(f"Error al abrir archivo {ruta}: {e}")
 try:
@@ -343,17 +348,33 @@ def run_subprocess_safe(cmd_args, timeout=None, **extra_kwargs):
         return proc, stdout, stderr
     return proc
 
-def set_dock_icon(mode):
+def set_dock_icon(mode="dark"):
+    if sys.platform != "darwin":
+        return
     try:
-        icns_path = os.path.join(PROJECT_ROOT, "logoIMPdark.icns")
-        if os.path.exists(icns_path):
-            image = NSImage.alloc().initByReferencingFile_(icns_path)
-            NSApp.setApplicationIconImage_(image)
-            return
+        from AppKit import NSApplication, NSImage
+        app = NSApplication.sharedApplication()
+        candidates = [
+            os.path.join(PROJECT_ROOT, "IMPLOGO.icns"),
+            os.path.join(VIEWS_ICONS, "IMPLOGO.icns"),
+            os.path.join(PROJECT_ROOT, "logoIMPlight.icns"),
+            os.path.join(VIEWS_ICONS, "logo.png"),
+            os.path.join(PROJECT_ROOT, "logoIMPlight.png")
+        ]
+        for icns_path in candidates:
+            if os.path.exists(icns_path):
+                image = NSImage.alloc().initByReferencingFile_(os.path.abspath(icns_path))
+                if image:
+                    app.setApplicationIconImage_(image)
+                    return
         suffix = "light" if mode == "light" else "dark"
         icon_path = os.path.join(VIEWS_ICONS, f"logoIMP{suffix}.png")
-        image = NSImage.alloc().initByReferencingFile_(icon_path)
-        NSApp.setApplicationIconImage_(image)
+        if not os.path.exists(icon_path):
+            icon_path = os.path.join(VIEWS_ICONS, "logo.png")
+        if os.path.exists(icon_path):
+            image = NSImage.alloc().initByReferencingFile_(os.path.abspath(icon_path))
+            if image:
+                app.setApplicationIconImage_(image)
     except Exception as e:
         print(f" [ICON] No se pudo cambiar el icono del Dock: {e}")
 
@@ -556,17 +577,18 @@ def limpiar_archivos_desechables(dias=1):
                         pass
 
         # C. Resultados_Masivos
-        res_mas = os.path.join(base_app, "Resultados_Masivos")
-        if os.path.exists(res_mas):
-            for item in os.listdir(res_mas):
-                ip = os.path.join(res_mas, item)
-                if os.path.isdir(ip):
-                    try:
-                        if os.path.getmtime(ip) < limite_tiempo:
-                            shutil.rmtree(ip, ignore_errors=True)
-                            eliminados += 1
-                    except Exception:
-                        pass
+        for r_name in ["Resultados_Masivos", "Resultados masivos"]:
+            res_mas = os.path.join(base_app, r_name)
+            if os.path.exists(res_mas):
+                for item in os.listdir(res_mas):
+                    ip = os.path.join(res_mas, item)
+                    if os.path.isdir(ip):
+                        try:
+                            if os.path.getmtime(ip) < limite_tiempo:
+                                shutil.rmtree(ip, ignore_errors=True)
+                                eliminados += 1
+                        except Exception:
+                            pass
 
         # D. Directorios de temp_screenshots
         for tdir in [
@@ -662,10 +684,25 @@ class Api:
         os.makedirs(folder, exist_ok=True)
         return folder
 
+    def _get_resultados_masivos_dir(self):
+        """Retorna la ruta de Resultados_Masivos junto al ejecutable, creándola si no existe."""
+        if getattr(sys, 'frozen', False):
+            base = os.path.dirname(sys.executable)
+        else:
+            base = PROJECT_ROOT
+        cand_space = os.path.join(base, "Resultados masivos")
+        cand_under = os.path.join(base, "Resultados_Masivos")
+        if os.path.isdir(cand_space):
+            return cand_space
+        if os.path.isdir(cand_under):
+            return cand_under
+        os.makedirs(cand_under, exist_ok=True)
+        return cand_under
+
     def _resolver_ruta_archivo(self, ruta: str) -> str:
         """
         Resuelve una ruta guardada en base de datos (que puede haber sido guardada
-        en macOS o Windows) buscando en la ruta absoluta original, en Views/Files/ o en FilesIMP/.
+        en macOS o Windows) buscando en la ruta absoluta original, en Views/Files/, en Resultados_Masivos/ o en FilesIMP/.
         """
         if not ruta or not isinstance(ruta, str):
             return ""
@@ -682,11 +719,28 @@ class Api:
         candidato_views_rel = os.path.join(VIEWS_DIR, "Files", nombre)
         if os.path.exists(candidato_views_rel):
             return candidato_views_rel
-        # 2. Buscar en FilesIMP
+        # 2. Buscar en Resultados_Masivos (directo y subcarpetas)
+        res_mas = self._get_resultados_masivos_dir()
+        candidato_rm = os.path.join(res_mas, nombre)
+        if os.path.exists(candidato_rm):
+            return candidato_rm
+        try:
+            for root, _, files in os.walk(res_mas):
+                if nombre in files:
+                    return os.path.join(root, nombre)
+        except Exception:
+            pass
+        # 3. Buscar en FilesIMP (directo y subcarpetas)
         files_imp = self._get_files_imp_dir()
         candidato_imp = os.path.join(files_imp, nombre)
         if os.path.exists(candidato_imp):
             return candidato_imp
+        try:
+            for root, _, files in os.walk(files_imp):
+                if nombre in files:
+                    return os.path.join(root, nombre)
+        except Exception:
+            pass
         return ""
 
     def _init_supabase_config(self):
@@ -1496,67 +1550,6 @@ class Api:
         os.makedirs(temp_dir, exist_ok=True)
         ruta_pantallazo = os.path.join(temp_dir, f"wom_{imei}.png") if con_pantallazo else None
 
-        # ── Guardar automáticamente en FastReg (Módulo de Registros) ──
-        try:
-            from datetime import datetime
-            ahora_iso = datetime.now().astimezone().isoformat()
-            
-            existente_fast = None
-            try:
-                rf = safe_supabase(lambda: supabase.table('FastReg').select('*').eq('IMEI', str(imei).strip()).execute())
-                if rf and rf.data:
-                    existente_fast = rf.data[0]
-            except Exception:
-                pass
-
-            modelo_val = (opciones_pantallazo.get('modelo') if opciones_pantallazo else None) or ''
-            if not modelo_val:
-                if existente_fast and existente_fast.get('MODELO'):
-                    modelo_val = existente_fast.get('MODELO')
-                else:
-                    try:
-                        r_reg = safe_supabase(lambda: supabase.table('registros').select('modelo, cliente').eq('imei', str(imei).strip()).execute())
-                        if r_reg and r_reg.data:
-                            modelo_val = r_reg.data[0].get('modelo', '')
-                    except Exception:
-                        pass
-
-            cliente_val = (existente_fast.get('CLIENTE') if existente_fast else '') or ''
-            if not cliente_val or cliente_val == 'Anónimo':
-                try:
-                    r_reg = safe_supabase(lambda: supabase.table('registros').select('cliente').eq('imei', str(imei).strip()).execute())
-                    if r_reg and r_reg.data and r_reg.data[0].get('cliente'):
-                        cliente_val = r_reg.data[0].get('cliente')
-                except Exception:
-                    pass
-            if not cliente_val:
-                cliente_val = 'Anónimo'
-
-            fast_payload = {
-                'IMEI': str(imei).strip(),
-                'MODELO': modelo_val or '',
-                'ESTADO': 'Registrado',
-                'OPERADOR': 'WOM',
-                'CLIENTE': cliente_val,
-                'PAGO': existente_fast.get('PAGO', 'No') if existente_fast else 'No',
-                'LÍNEA': str(linea_wom).strip() if linea_wom else '',
-                'encargado': encargado_nombre or (existente_fast.get('encargado') if existente_fast else ''),
-                'RAZÓN': existente_fast.get('RAZÓN') or 'Registro WOM'
-            }
-            safe_supabase(lambda: supabase.table('FastReg').upsert(fast_payload).execute())
-            print(f"[FastReg] Registro sincronizado en FastReg para IMEI {imei} (WOM)")
-
-            if linea_wom:
-                try:
-                    safe_supabase(lambda: supabase.table('lineas').update({'las_use': ahora_iso}).eq('numero', str(linea_wom).strip()).execute())
-                except Exception as le:
-                    print(f"Error actualizando las_use: {le}")
-
-            if self.window:
-                self.window.evaluate_js("if (typeof window.recibirActualizacionFastReg === 'function') { window.recibirActualizacionFastReg(); }")
-        except Exception as e_fast:
-            print(f"Error guardando en FastReg (WOM): {e_fast}")
-        
         def run_bot():
             import json
             from datetime import datetime
@@ -1580,7 +1573,67 @@ class Api:
                     self.actualizar_campo(imei, 'reg_wom', datetime.now().astimezone().isoformat())
                 elif resultado.get("status") == "error":
                     self.actualizar_campo(imei, 'reg_wom', 'Error')
-                
+
+                # ── Guardar en FastReg SOLO después de conocer el resultado ──
+                try:
+                    ahora_iso = datetime.now().astimezone().isoformat()
+                    existente_fast = None
+                    try:
+                        rf = safe_supabase(lambda: supabase.table('FastReg').select('*').eq('IMEI', str(imei).strip()).execute())
+                        if rf and rf.data:
+                            existente_fast = rf.data[0]
+                    except Exception:
+                        pass
+
+                    modelo_val = (opciones_pantallazo.get('modelo') if opciones_pantallazo else None) or ''
+                    if not modelo_val:
+                        if existente_fast and existente_fast.get('MODELO'):
+                            modelo_val = existente_fast.get('MODELO')
+                        else:
+                            try:
+                                r_reg = safe_supabase(lambda: supabase.table('registros').select('modelo, cliente').eq('imei', str(imei).strip()).execute())
+                                if r_reg and r_reg.data:
+                                    modelo_val = r_reg.data[0].get('modelo', '')
+                            except Exception:
+                                pass
+
+                    cliente_val = (existente_fast.get('CLIENTE') if existente_fast else '') or ''
+                    if not cliente_val or cliente_val == 'Anónimo':
+                        try:
+                            r_reg = safe_supabase(lambda: supabase.table('registros').select('cliente').eq('imei', str(imei).strip()).execute())
+                            if r_reg and r_reg.data and r_reg.data[0].get('cliente'):
+                                cliente_val = r_reg.data[0].get('cliente')
+                        except Exception:
+                            pass
+                    if not cliente_val:
+                        cliente_val = 'Anónimo'
+
+                    estado_fast = 'Registrado' if resultado.get('status') == 'success' else 'Error'
+                    fast_payload = {
+                        'IMEI': str(imei).strip(),
+                        'MODELO': modelo_val or '',
+                        'ESTADO': estado_fast,
+                        'OPERADOR': 'WOM',
+                        'CLIENTE': cliente_val,
+                        'PAGO': existente_fast.get('PAGO', 'No') if existente_fast else 'No',
+                        'LÍNEA': str(linea_wom).strip() if linea_wom else '',
+                        'encargado': encargado_nombre or (existente_fast.get('encargado') if existente_fast else ''),
+                        'RAZÓN': existente_fast.get('RAZÓN') or 'Registro WOM'
+                    }
+                    safe_supabase(lambda: supabase.table('FastReg').upsert(fast_payload).execute())
+                    print(f"[FastReg] Registro sincronizado en FastReg para IMEI {imei} (WOM) → {estado_fast}")
+
+                    if linea_wom and estado_fast == 'Registrado':
+                        try:
+                            safe_supabase(lambda: supabase.table('lineas').update({'las_use': ahora_iso}).eq('numero', str(linea_wom).strip()).execute())
+                        except Exception as le:
+                            print(f"Error actualizando las_use: {le}")
+
+                    if self.window:
+                        self.window.evaluate_js("if (typeof window.recibirActualizacionFastReg === 'function') { window.recibirActualizacionFastReg(); }")
+                except Exception as e_fast:
+                    print(f"Error guardando en FastReg (WOM): {e_fast}")
+
                 ss_path = resultado.get("screenshot_path")
                 if ss_path and os.path.exists(ss_path):
                     abrir_archivo(ss_path)
@@ -1636,83 +1689,6 @@ class Api:
         os.makedirs(temp_dir, exist_ok=True)
         ruta_pantallazo = os.path.join(temp_dir, f"etb_{imei}.png") if con_pantallazo else None
 
-        # ── Guardar automáticamente en FastReg (Módulo de Registros) ──
-        try:
-            from datetime import datetime
-            ahora_iso = datetime.now().astimezone().isoformat()
-
-            existente_fast = None
-            try:
-                rf = safe_supabase(lambda: supabase.table('FastReg').select('*').eq('IMEI', str(imei).strip()).execute())
-                if rf and rf.data:
-                    existente_fast = rf.data[0]
-            except Exception:
-                pass
-
-            modelo_val = (opciones_pantallazo.get('modelo') if opciones_pantallazo else None) or ''
-            if not modelo_val:
-                if existente_fast and existente_fast.get('MODELO'):
-                    modelo_val = existente_fast.get('MODELO')
-                else:
-                    try:
-                        r_reg = safe_supabase(lambda: supabase.table('registros').select('modelo, cliente, encargado').eq('imei', str(imei).strip()).execute())
-                        if r_reg and r_reg.data:
-                            modelo_val = r_reg.data[0].get('modelo', '')
-                    except Exception:
-                        pass
-
-            cliente_val = (existente_fast.get('CLIENTE') if existente_fast else '') or ''
-            if not cliente_val or cliente_val == 'Anónimo':
-                try:
-                    r_reg = safe_supabase(lambda: supabase.table('registros').select('cliente').eq('imei', str(imei).strip()).execute())
-                    if r_reg and r_reg.data and r_reg.data[0].get('cliente'):
-                        cliente_val = r_reg.data[0].get('cliente')
-                except Exception:
-                    pass
-            if not cliente_val:
-                cliente_val = 'Anónimo'
-
-            encargado_etb = (existente_fast.get('encargado') if existente_fast else '') or ''
-            if not encargado_etb and linea_etb:
-                try:
-                    res_linea = safe_supabase(lambda: supabase.table('lineas').select('encargado').eq('numero', str(linea_etb).strip()).execute())
-                    if res_linea and res_linea.data and res_linea.data[0].get('encargado'):
-                        encargado_etb = res_linea.data[0]['encargado']
-                except Exception:
-                    pass
-            if not encargado_etb and imei:
-                try:
-                    res_rg = safe_supabase(lambda: supabase.table('registros').select('encargado').eq('imei', str(imei).strip()).execute())
-                    if res_rg and res_rg.data and res_rg.data[0].get('encargado'):
-                        encargado_etb = res_rg.data[0]['encargado']
-                except Exception:
-                    pass
-
-            fast_payload = {
-                'IMEI': str(imei).strip(),
-                'MODELO': modelo_val or '',
-                'ESTADO': 'Registrado',
-                'OPERADOR': 'ETB',
-                'CLIENTE': cliente_val,
-                'PAGO': existente_fast.get('PAGO', 'No') if existente_fast else 'No',
-                'LÍNEA': str(linea_etb).strip() if linea_etb else '',
-                'encargado': encargado_etb,
-                'RAZÓN': existente_fast.get('RAZÓN') or 'Registro ETB'
-            }
-            safe_supabase(lambda: supabase.table('FastReg').upsert(fast_payload).execute())
-            print(f"[OK] [FastReg] Registro sincronizado en FastReg para IMEI {imei} (ETB)")
-
-            if linea_etb:
-                try:
-                    safe_supabase(lambda: supabase.table('lineas').update({'las_use': ahora_iso}).eq('numero', str(linea_etb).strip()).execute())
-                except Exception as le:
-                    print(f"[WARN] Error actualizando las_use: {le}")
-
-            if self.window:
-                self.window.evaluate_js("if (typeof window.recibirActualizacionFastReg === 'function') { window.recibirActualizacionFastReg(); }")
-        except Exception as e_fast:
-            print(f"[WARN] Error guardando en FastReg (ETB): {e_fast}")
-        
         def run_bot():
             import json
             from datetime import datetime
@@ -1733,7 +1709,76 @@ class Api:
                     self.actualizar_campo(imei, 'reg_etb', datetime.now().astimezone().isoformat())
                 elif resultado.get("status") == "error":
                     self.actualizar_campo(imei, 'reg_etb', 'Error')
-                
+
+                # ── Guardar en FastReg SOLO después de conocer el resultado ──
+                try:
+                    ahora_iso = datetime.now().astimezone().isoformat()
+                    existente_fast = None
+                    try:
+                        rf = safe_supabase(lambda: supabase.table('FastReg').select('*').eq('IMEI', str(imei).strip()).execute())
+                        if rf and rf.data:
+                            existente_fast = rf.data[0]
+                    except Exception:
+                        pass
+
+                    modelo_val = (opciones_pantallazo.get('modelo') if opciones_pantallazo else None) or ''
+                    if not modelo_val:
+                        if existente_fast and existente_fast.get('MODELO'):
+                            modelo_val = existente_fast.get('MODELO')
+                        else:
+                            try:
+                                r_reg = safe_supabase(lambda: supabase.table('registros').select('modelo, cliente, encargado').eq('imei', str(imei).strip()).execute())
+                                if r_reg and r_reg.data:
+                                    modelo_val = r_reg.data[0].get('modelo', '')
+                            except Exception:
+                                pass
+
+                    cliente_val = (existente_fast.get('CLIENTE') if existente_fast else '') or ''
+                    if not cliente_val or cliente_val == 'Anónimo':
+                        try:
+                            r_reg = safe_supabase(lambda: supabase.table('registros').select('cliente').eq('imei', str(imei).strip()).execute())
+                            if r_reg and r_reg.data and r_reg.data[0].get('cliente'):
+                                cliente_val = r_reg.data[0].get('cliente')
+                        except Exception:
+                            pass
+                    if not cliente_val:
+                        cliente_val = 'Anónimo'
+
+                    encargado_etb = (existente_fast.get('encargado') if existente_fast else '') or ''
+                    if not encargado_etb and linea_etb:
+                        try:
+                            res_linea = safe_supabase(lambda: supabase.table('lineas').select('encargado').eq('numero', str(linea_etb).strip()).execute())
+                            if res_linea and res_linea.data and res_linea.data[0].get('encargado'):
+                                encargado_etb = res_linea.data[0]['encargado']
+                        except Exception:
+                            pass
+
+                    estado_fast = 'Registrado' if resultado.get('status') == 'success' else 'Error'
+                    fast_payload = {
+                        'IMEI': str(imei).strip(),
+                        'MODELO': modelo_val or '',
+                        'ESTADO': estado_fast,
+                        'OPERADOR': 'ETB',
+                        'CLIENTE': cliente_val,
+                        'PAGO': existente_fast.get('PAGO', 'No') if existente_fast else 'No',
+                        'LÍNEA': str(linea_etb).strip() if linea_etb else '',
+                        'encargado': encargado_etb,
+                        'RAZÓN': existente_fast.get('RAZÓN') or 'Registro ETB'
+                    }
+                    safe_supabase(lambda: supabase.table('FastReg').upsert(fast_payload).execute())
+                    print(f"[OK] [FastReg] Registro sincronizado para IMEI {imei} (ETB) → {estado_fast}")
+
+                    if linea_etb and estado_fast == 'Registrado':
+                        try:
+                            safe_supabase(lambda: supabase.table('lineas').update({'las_use': ahora_iso}).eq('numero', str(linea_etb).strip()).execute())
+                        except Exception as le:
+                            print(f"[WARN] Error actualizando las_use: {le}")
+
+                    if self.window:
+                        self.window.evaluate_js("if (typeof window.recibirActualizacionFastReg === 'function') { window.recibirActualizacionFastReg(); }")
+                except Exception as e_fast:
+                    print(f"[WARN] Error guardando en FastReg (ETB): {e_fast}")
+
                 ss_path = resultado.get("screenshot_path")
                 if ss_path and os.path.exists(ss_path):
                     abrir_archivo(ss_path)
@@ -2011,15 +2056,8 @@ class Api:
 
                                     if not es_placeholder_nuevo:
                                         if era_placeholder:
-                                            # Primera consulta tras registro: solo notificar si ya es el trabajo final exitoso
-                                            if self._evaluar_estado_registro(new_reg) == "exitoso":
-                                                razon_orig = (new_reg.get('razon') or '').lower().strip()
-                                                if "desbloqueo" in razon_orig or "no registro" in razon_orig:
-                                                    msg = f"El IMEI {imei} ha sido desbloqueado"
-                                                    self._enviar_notificacion_nativa("IMEI Manager Pro", msg, subtitulo="IMEI Desbloqueado")
-                                                elif "bloqueo" in razon_orig:
-                                                    msg = f"El IMEI {imei} ha sido bloqueado"
-                                                    self._enviar_notificacion_nativa("IMEI Manager Pro", msg, subtitulo=f"IMEI Bloqueado ({new_estado})")
+                                            # Primera consulta tras registro: NO notificar, es el estado inicial del equipo
+                                            pass
                                         else:
                                             # Cambio entre estados confirmados posteriores
                                             es_bloqueado_previo = _es_estado_bloqueo(old_est_low)
@@ -2219,24 +2257,20 @@ class Api:
             return
 
         era_placeholder = _es_estado_placeholder(old_estado)
+        if era_placeholder:
+            # Primera consulta tras registro: NO crear notificación, es el estado inicial del equipo
+            print(f"[INFO] [NOTIFICACIÓN] Suprimida para IMEI {imei}: primera consulta tras registro.")
+            return
 
         razon_orig = (new_reg.get('razon') or '').lower().strip()
         if "desbloqueo" in razon_orig or "no registro" in razon_orig:
             # Si viene de estado confirmado anterior que no era bloqueo → ignorar
-            if old_estado and not era_placeholder and not _es_estado_bloqueo(old_estado):
+            if old_estado and not _es_estado_bloqueo(old_estado):
                 return
-            # Si era placeholder y razón es "Desbloqueo" → primer scrape de un registro
-            # recién ingresado como desbloqueo. Notificar porque confirma el estado esperado.
             razon_notif = "Desbloqueo"
         elif "bloqueo" in razon_orig:
             # Si viene de estado confirmado anterior que no era libre → ignorar
-            if old_estado and not era_placeholder and 'libre' not in old_estado:
-                return
-            # Si era placeholder y razón es "Bloqueo" → primer scrape de registro recién
-            # ingresado. NO notificar: el usuario acababa de ingresarlo como bloqueo,
-            # la confirmación no es un evento nuevo de bloqueo.
-            if era_placeholder:
-                print(f"[INFO] [NOTIFICACIÓN] Suprimida para IMEI {imei}: primera consulta de registro nuevo con Bloqueo.")
+            if old_estado and 'libre' not in old_estado:
                 return
             razon_notif = "Bloqueo"
         else:
@@ -2656,7 +2690,7 @@ class Api:
 
         try:
             if os.path.exists(archivo):
-                with open(archivo, "r") as f:
+                with open(archivo, "r", encoding="utf-8") as f:
                     estado = _json.load(f)
             else:
                 estado = {
@@ -2674,7 +2708,7 @@ class Api:
                     estado["consultas_restantes"] = LIMITE
                     estado["bloqueado_hasta"] = None
                     estado["ultimo_reset"] = ahora.isoformat()
-                    with open(archivo, "w") as f:
+                    with open(archivo, "w", encoding="utf-8") as f:
                         _json.dump(estado, f)
 
             # Calcular tiempo restante
@@ -2704,6 +2738,23 @@ class Api:
                 "horas": 0,
                 "minutos": 0
             }
+
+    def consultar_estado_imei_colombia(self, imei, headless: bool = True):
+        """
+        Consulta IMEI Colombia (solo estado/operador en texto, sin pantallazo).
+        Retorna {status, estado, operador}
+        """
+        try:
+            scraper = ScraperEstado(headless=headless)
+            estado, operador = scraper.consultar(imei)
+            scraper.close()
+            return {
+                "status": "success",
+                "estado": estado,
+                "operador": operador
+            }
+        except Exception as e:
+            return {"status": "error", "mensaje": str(e)}
 
     def consultar_imei_colombia_con_pantallazo(self, imei, headless: bool = True):
         """
@@ -3807,7 +3858,7 @@ end tell
 
         try:
             if os.path.exists(archivo):
-                with open(archivo, "r") as f:
+                with open(archivo, "r", encoding="utf-8") as f:
                     estado = _json.load(f)
             else:
                 estado = {
@@ -3831,7 +3882,7 @@ end tell
                     estado["consultas_restantes"] = LIMITE
                     estado["bloqueado_hasta"] = None
                     estado["ultimo_reset"] = ahora.isoformat()
-                    with open(archivo, "w") as f:
+                    with open(archivo, "w", encoding="utf-8") as f:
                         _json.dump(estado, f)
 
             # Calcular tiempo restante
@@ -4579,12 +4630,12 @@ end tell
                 ahora_dt = datetime.now().astimezone()
                 grupo_id = f"MASIVO_{ahora_dt.strftime('%Y%m%d_%H%M%S')}"
                 
-                # Directorio para guardar resultados de la carga masiva → FilesIMP/Cliente - Fecha (sin corchetes)
+                # Directorio para guardar resultados de la carga masiva → Resultados_Masivos/Cliente - Fecha (sin corchetes)
                 fecha_hoy = ahora_dt.strftime('%d-%m-%Y')
                 cliente_folder = re.sub(r'[<>:"/\\|?*]', '_', cliente_val)
                 folder_name = f"{cliente_folder} - {fecha_hoy}"
-                files_imp_dir = self._get_files_imp_dir()
-                output_dir = os.path.join(files_imp_dir, folder_name)
+                resultados_masivos_dir = self._get_resultados_masivos_dir()
+                output_dir = os.path.join(resultados_masivos_dir, folder_name)
                 try:
                     os.makedirs(output_dir, exist_ok=True)
                 except Exception as fe:
@@ -4751,19 +4802,40 @@ end tell
                                 try:
                                     import shutil
                                     dest_ss = os.path.join(out_dir, f"{imei_val}_{operador_reg or 'comprobante'}.png")
-                                    shutil.copy2(ss_path, dest_ss)
+                                    if os.path.abspath(ss_path) != os.path.abspath(dest_ss):
+                                        shutil.copy2(ss_path, dest_ss)
+                                    print(f"[Masivo] Pantallazo guardado en carpeta de lote: {dest_ss}")
                                 except Exception as sse:
                                     print(f"Error guardando comprobante en carpeta de lote: {sse}")
 
                         # PDF o Constancia si es detallada o estándar
                         if tipo_declaracion in ['detallada', 'estandar']:
                             try:
+                                enc_nombre = reg_item.get('nombre_propietario') or cliente_nombre
+                                enc_cedula = reg_item.get('cedula_propietario')
+                                enc_ciudad = reg_item.get('ciudad')
+                                enc_linea = reg_item.get('linea_usuario') or linea_num
+                                
+                                # Si faltan datos del propietario, intentar autocompletar con el encargado de la línea
+                                if (not enc_cedula or not enc_ciudad) and encargado_val:
+                                    try:
+                                        enc_info = self.obtener_encargado(encargado_val)
+                                        if enc_info:
+                                            if not enc_cedula:
+                                                enc_cedula = enc_info.get('identificacion', '')
+                                            if not enc_ciudad:
+                                                enc_ciudad = enc_info.get('lugar_expedicion', '')
+                                            if not reg_item.get('nombre_propietario') and enc_info.get('nombre'):
+                                                enc_nombre = enc_info.get('nombre')
+                                    except Exception:
+                                        pass
+
                                 datos_pdf = {
-                                    'nombre': reg_item.get('nombre_propietario') or cliente_nombre,
+                                    'nombre': enc_nombre,
                                     'tipo_doc': 'C.C.',
-                                    'num_doc': reg_item.get('cedula_propietario'),
-                                    'lugar_exp': reg_item.get('ciudad'),
-                                    'linea_usuario': reg_item.get('linea_usuario'),
+                                    'num_doc': enc_cedula or '',
+                                    'lugar_exp': enc_ciudad or '',
+                                    'linea_usuario': enc_linea or '',
                                     'operador': reg_item.get('operador_declaracion') or operador_reg,
                                     'modelo': modelo_val,
                                     'imei': imei_val,
@@ -4771,14 +4843,26 @@ end tell
                                     'salida_dir': out_dir
                                 }
                                 args_pdf = script_command("GeneradorPDF.py") + [json.dumps(datos_pdf)]
-                                run_subprocess_safe(args_pdf, timeout=60)
+                                _proc_pdf, _stdout_pdf, _ = run_subprocess_safe(args_pdf, timeout=60)
+                                _pdf_ruta_generada = None
+                                for _lp in reversed((_stdout_pdf or '').strip().split('\n')):
+                                    _lp = _lp.strip()
+                                    if _lp.startswith('{'):
+                                        try:
+                                            _rp = json.loads(_lp)
+                                            if _rp.get('status') == 'success':
+                                                _pdf_ruta_generada = _rp.get('ruta')
+                                        except Exception:
+                                            pass
+                                        break
+                                if _pdf_ruta_generada and os.path.exists(_pdf_ruta_generada):
+                                    print(f"[Masivo] Declaracion generada exitosamente en Resultados_Masivos: {os.path.basename(_pdf_ruta_generada)}")
                             except Exception as pe:
                                 print(f"Error generando PDF/constancia masivo item {imei_val}: {pe}")
 
                         # Notificar resultado individual al frontend
                         try:
                             if self.window:
-                                toast_type = "success" if es_exito else "warning"
                                 toast_type = "success" if es_exito else "warning"
                                 self.window.evaluate_js(f"showToast('({idx+1}/{total}) IMEI {imei_val}: {estado_final}', '{toast_type}');")
                                 self.window.evaluate_js("if (typeof window.recibirActualizacionFastReg === 'function') { window.recibirActualizacionFastReg(); }")
@@ -4793,6 +4877,14 @@ end tell
                             self.window.evaluate_js(f"showToast('Lote Masivo Completado: {exitos} exitosos, {fallos} fallidos.', 'success');")
                             self.window.evaluate_js("if (typeof cargarDatosFastReg === 'function') { cargarDatosFastReg(); }")
                             self.window.evaluate_js("if (typeof renderizarTabla === 'function') { renderizarTabla(); }")
+                        # Abrir carpeta del lote en Resultados_Masivos al completar el lote
+                        try:
+                            abrir_archivo(out_dir)
+                        except Exception:
+                            try:
+                                abrir_archivo(self._get_resultados_masivos_dir())
+                            except Exception:
+                                pass
                     except Exception:
                         pass
 
@@ -4848,6 +4940,14 @@ if __name__ == '__main__':
     VIEWS_HTML = os.path.join(VIEWS_DIR, "html")
     VIEWS_ICONS = os.path.join(VIEWS_DIR, "icons")
     MODELS_DIR = os.path.join(PROJECT_ROOT, "Models")
+
+    # Configurar icono del Dock redondeado en macOS al arrancar
+    set_dock_icon()
+    def _dock_icon_loop():
+        for delay in [0.5, 1.2, 2.5]:
+            time.sleep(delay)
+            set_dock_icon()
+    threading.Thread(target=_dock_icon_loop, daemon=True).start()
 
     puerto_asignado = obtener_puerto_libre()
     print(f" [SERVER] Iniciando en puerto {puerto_asignado}...")

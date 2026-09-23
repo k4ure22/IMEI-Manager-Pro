@@ -753,7 +753,7 @@ function mostrarToastConfirmacionConsulta(toCheck) {
         document.getElementById('toastBtnConsultar')?.addEventListener('click', () => {
             cerrarToastConfirmacion();
             setTimeout(() => {
-                showToast(`Consultando ${toCheck.length} registros pendientes/rojos...`, "info");
+                showToast(`Consultando ${toCheck.length} registros pendientes/amarillos/rojos...`, "info");
                 procesarColaBackground(toCheck);
             }, 400);
         });
@@ -807,7 +807,7 @@ function inicializarAutocomplete() {
 /* ============ AUTOMATIC CHECKER HELPERS ============ */
 function esPendienteORojo(reg) {
     const neon = evaluarNeon(reg);
-    if (neon === 'neon-rojo') return true;
+    if (neon === 'neon-rojo' || neon === 'neon-amarillo') return true;
     if (!reg.estado) return true;
     const est = reg.estado.toLowerCase();
     if (est === '' || est.includes('consultando') || est.includes('pendiente') || est.includes('sin consultar') || est.includes('no cargó página/input') || est.includes('falló 7 veces') || est.includes('error consulta')) {
@@ -1171,7 +1171,7 @@ function renderizarTabla() {
 
             tr.innerHTML = `<td style="width:10px;padding:0 0 0 6px;" class="relative"><div class="neon-indicator"></div></td>
                         <td style="font-family:'SF Mono','Fira Code','Courier New',monospace;font-size:12.5px;letter-spacing:0.04em;color:var(--color-sec);font-weight:600;font-variant-numeric:tabular-nums;cursor:pointer;" class="select-all imei-copy-cell" onclick="event.stopPropagation(); navigator.clipboard.writeText('${reg.imei}').then(()=>showToast('IMEI copiado','copy'));" title="Copiar IMEI">${reg.imei}</td>
-                        <td id="modelo-${originalIndex}">${modeloHTML}</td>
+                        <td id="modelo-${originalIndex}" style="cursor:pointer;" class="select-all" onclick="event.stopPropagation(); navigator.clipboard.writeText('${(reg.modelo || '').replace(/'/g, "\\'")}').then(()=>showToast('Modelo copiado','copy'));" title="Copiar Modelo">${modeloHTML}</td>
                         <td id="estado-${originalIndex}">${estadoHTML}</td>
                         <td id="operador-${originalIndex}">${operadorHTML}</td>
                         <td style="color:var(--color-sec);opacity:0.85;font-size:13px;">${reg.cliente || ''}</td>
@@ -1319,9 +1319,9 @@ function renderizarPanelOperativo(reg) {
     };
 
     // 2. Función generadora de botones usando tus clases exactas (w-btn)
-    const btn = (label, onclick, key, id = '') => {
+    const btn = (label, onclick, key, id = '', extraClass = '') => {
         const c = COLORS[key];
-        return `<button ${ id ? `id="${id}"` : '' } class="w-btn w-full flex items-center justify-center min-h-[42px] transition-all hover:scale-[1.02]"
+        return `<button ${ id ? `id="${id}"` : '' } class="w-btn w-full flex items-center justify-center min-h-[42px] transition-all hover:scale-[1.02] ${extraClass}"
             style = "background:${c.bg};border-color:${c.bd};color:${c.tx};"
             onclick="${onclick}">
                 <span class="text-[10px] font-black uppercase tracking-wider text-center drop-shadow-md">${label}</span>
@@ -1338,8 +1338,8 @@ function renderizarPanelOperativo(reg) {
                     <div class="grid grid-cols-2 gap-2 mt-2">
                         ${btn('Registrar WOM', 'ejecutarRegistroWom()', 'registrarWom')}
                         ${btn('Registrar ETB', 'ejecutarRegistroEtb()', 'registrarEtb')}
-                        ${btn('Bloquear WOM', "ejecutarBloqueoDummy('WOM')", 'bloquearWom')}
-                        ${btn('Bloquear ETB', "ejecutarBloqueoDummy('ETB')", 'bloquearEtb')}
+                        ${btn('Bloquear WOM', "ejecutarBloqueoDummy('WOM')", 'bloquearWom', '', 'w-btn-locked')}
+                        ${btn('Bloquear ETB', "ejecutarBloqueoDummy('ETB')", 'bloquearEtb', '', 'w-btn-locked')}
                         ${btn('Desbloq. WOM', 'solicitarDesbloqueoWom()', 'desbloquearWom')}
                         ${btn('Desbloq. ETB', `abrirModalDesbloqueoETB('${reg.imei}')`, 'desbloquearEtb')}
                         ${btn('Decl. WOM', "generarDeclaracion('wom')", 'declaracionWom', 'btnPanelDeclWom')}
@@ -1388,9 +1388,9 @@ async function actualizarWidgetInteligente(reg) {
         anexos: { bg: 'rgba(255,255,255,0.04)', bd: 'rgba(255,255,255,0.10)', tx: 'var(--color-sec)' },
     };
 
-    const btn = (label, onclick, key) => {
+    const btn = (label, onclick, key, extraClass = '') => {
         const c = COLORS[key] || COLORS.anexos;
-        return `<button onclick = "${onclick}" class="w-btn w-full h-full"
+        return `<button onclick = "${onclick}" class="w-btn w-full h-full ${extraClass}"
             style = "background:${c.bg};border-color:${c.bd};color:${c.tx};"
                 > <span class="drop-shadow-md">${label}</span></button> `;
     };
@@ -1418,7 +1418,7 @@ async function actualizarWidgetInteligente(reg) {
                 btn2 = btn('Imprimir anexos', `etbImprimirAnexos()`, 'anexos');
                 cardContent = infoRow('Línea ETB', `<span id="lblLineaActualETB">${reg.linea || 'Toca para asignar'}</span>`, 'w-val-mono text-cyan-400', `abrirSelectorLineaWidget('ETB')`);
             } else {
-                btn1 = btn('Bloquear ETB', "ejecutarBloqueoDummy('ETB')", 'bloquearEtb');
+                btn1 = btn('Bloquear ETB', "ejecutarBloqueoDummy('ETB')", 'bloquearEtb', 'w-btn-locked');
                 btn2 = btn('Asignar línea', "abrirSelectorLineaWidget('ETB')", 'asignarLinea');
                 cardContent = infoRow('Línea actual', `<span id="lblLineaActualETB">${reg.linea || 'Toca para asignar'}</span>`, 'w-val-mono text-cyan-400', `abrirSelectorLineaWidget('ETB')`);
             }
@@ -1441,7 +1441,7 @@ async function actualizarWidgetInteligente(reg) {
 
                 cardContent = infoRow('Línea WOM', `<span id="lblLineaActualWOM">${reg.linea || 'Toca para asignar'}</span>`, 'w-val-mono text-purple-400', `abrirSelectorLineaWidget('WOM')`) + pinContent;
             } else {
-                btn1 = btn('Bloquear WOM', "ejecutarBloqueoDummy('WOM')", 'bloquearWom');
+                btn1 = btn('Bloquear WOM', "ejecutarBloqueoDummy('WOM')", 'bloquearWom', 'w-btn-locked');
                 btn2 = btn('Registrar WOM', 'ejecutarRegistroWom()', 'registrarWom');
                 cardContent = infoRow('Línea WOM', `<span id="lblLineaActualWOM">${reg.linea || 'Toca para asignar'}</span>`, 'w-val-mono text-purple-400', `abrirSelectorLineaWidget('WOM')`);
             }
@@ -2013,6 +2013,29 @@ function copiarIMEI() {
     });
 }
 
+/* ============ COPÍADO MODELO ============ */
+function copiarModeloDetalles() {
+    const el = document.getElementById('detModelo');
+    let mod = el ? el.value.trim() : '';
+    if (!mod && indiceDetallesActual !== null && registros[indiceDetallesActual]) {
+        mod = (registros[indiceDetallesActual].modelo || '').trim();
+    }
+    if (mod) {
+        navigator.clipboard.writeText(mod).then(() => {
+            showToast("Modelo copiado al portapapeles", "copy");
+        });
+    } else {
+        showToast("No hay modelo para copiar", "warning");
+    }
+}
+window.copiarModeloDetalles = copiarModeloDetalles;
+
+/* ============ BLOQUEO OPERADOR (DUMMY / VERSION MAX) ============ */
+function ejecutarBloqueoDummy(operador) {
+    showToast("Actualice a la versión Max", "warning");
+}
+window.ejecutarBloqueoDummy = ejecutarBloqueoDummy;
+
 /* ============ MENÚ CONTEXTUAL ENCARGADO ============ */
 let _menuEncargadoAbierto = false;
 
@@ -2205,9 +2228,16 @@ async function abrirPersonal() {
 }
 
 function cerrarPersonal() {
+    const vistaForm = document.getElementById('personalVistaForm');
+    if (vistaForm && !vistaForm.classList.contains('hidden')) {
+        // Estamos en la vista de formulario → volver a la lista sin cerrar el overlay
+        volverPersonalLista();
+        return;
+    }
+    // Estamos en la lista → cerrar el overlay completo
     document.getElementById('personalOverlay').classList.remove('active');
-    volverPersonalLista();
 }
+window.cerrarPersonal = cerrarPersonal;
 
 async function cargarGridPersonal() {
     todosLosEncargados = await window.pywebview.api.obtener_todos_encargados();
@@ -2280,6 +2310,11 @@ function volverPersonalLista() {
     document.getElementById('personalVistaLista').classList.remove('hidden');
     document.getElementById('personalVistaForm').classList.add('hidden');
 }
+window.abrirPersonal = abrirPersonal;
+window.volverPersonalLista = volverPersonalLista;
+window.mostrarFormPersonal = mostrarFormPersonal;
+window.guardarFormPersonal = guardarFormPersonal;
+window.borrarEncargado = borrarEncargado;
 
 async function editarFormPersonal(nombre) {
     const enc = todosLosEncargados.find(e => e.nombre === nombre);
@@ -2505,6 +2540,9 @@ function abrirModal() {
     // Reset selections
     document.querySelectorAll('#modalOverlay .option-card').forEach(c => c.classList.remove('active'));
     regState = { razon: '', encargado: '', cliente: '', cliente_info: null };
+    const secOp = document.getElementById('seccionOperadorBloqueo');
+    if (secOp) secOp.classList.add('hidden');
+    delete regState.operadorBloqueo;
 }
 
 function cerrarNuevoRegistro() {
@@ -2633,7 +2671,39 @@ function selectOption(type, value, el) {
     container.querySelectorAll('.option-card').forEach(c => c.classList.remove('active'));
     el.classList.add('active');
     regState[type] = value;
+
+    if (type === 'razon') {
+        const secOp = document.getElementById('seccionOperadorBloqueo');
+        if (secOp) {
+            if (value === 'Bloqueo') {
+                secOp.classList.remove('hidden');
+                if (!regState.operadorBloqueo) {
+                    seleccionarOperadorBloqueo('ETB');
+                }
+            } else {
+                secOp.classList.add('hidden');
+                delete regState.operadorBloqueo;
+            }
+        }
+    }
 }
+
+function seleccionarOperadorBloqueo(op) {
+    regState.operadorBloqueo = op;
+    const btnEtb = document.getElementById('btnOpEtb');
+    const btnWom = document.getElementById('btnOpWom');
+    const pill = document.getElementById('operadorSliderPill');
+    if (op === 'ETB') {
+        btnEtb?.classList.add('active');
+        btnWom?.classList.remove('active');
+        if (pill) pill.className = 'operador-slider-pill pos-etb';
+    } else {
+        btnWom?.classList.add('active');
+        btnEtb?.classList.remove('active');
+        if (pill) pill.className = 'operador-slider-pill pos-wom';
+    }
+}
+window.seleccionarOperadorBloqueo = seleccionarOperadorBloqueo;
 
 async function confirmarNuevoCliente() {
     const nombreEl = document.getElementById('ncNombre');
@@ -2822,6 +2892,8 @@ async function confirmarRegistro() {
     if (!regState.encargado) return showToast("Seleccione Encargado", "warning");
     if (!regState.cliente) return showToast("Asigne un cliente", "warning");
 
+    const esBloqueoWom = regState.razon === 'Bloqueo' && regState.operadorBloqueo === 'WOM';
+
     const nuevoReg = {
         imei,
         modelo,
@@ -2830,7 +2902,7 @@ async function confirmarRegistro() {
         encargado: regState.encargado,
         cliente_info: regState.cliente_info,
         estado: "Consultando...",
-        operador: "...",
+        operador: regState.operadorBloqueo || "...",
         pago: 'No',
         ingreso: new Date().toISOString()
     };
@@ -2840,8 +2912,13 @@ async function confirmarRegistro() {
         showToast("Registro Guardado con éxito", "success");
         cerrarNuevoRegistro();
         await cargarDatos();
-        const newIndex = registros.findIndex(r => r.imei === imei);
-        if (newIndex !== -1) forzarScraper(imei, newIndex);
+        const newIndex = registros.findIndex(r => String(r.imei).trim() === String(imei).trim());
+        if (newIndex !== -1) {
+            await forzarScraper(imei, newIndex);
+        }
+        if (esBloqueoWom) {
+            await ejecutarRegistroWomPorImei(imei);
+        }
     } else {
         showToast("Error al guardar registro", "error");
     }
@@ -3531,28 +3608,30 @@ async function confirmarEnvioCorreoWom() {
         showToast(res.mensaje, 'save');
         document.getElementById('womDesbloqueoOverlay').classList.remove('active');
         const fechaEnvio = new Date().toISOString();
-        if (indiceDetallesActual !== null) {
-            registros[indiceDetallesActual].fecha_correo_wom = fechaEnvio;
-            if (!registros[indiceDetallesActual].fecha_declaracion_generada) {
-                registros[indiceDetallesActual].fecha_declaracion_generada = fechaEnvio;
-            }
-            actualizarWidgetInteligente(registros[indiceDetallesActual]);
-        }
+        const imeiWom = womDesbIMEIActual;
 
-        // Marcar visualmente como enviado/procesado (amarillo) sin sobreescribir el estado real del IMEI
-        try {
-            const imeiWom = womDesbIMEIActual;
-            await window.pywebview.api.actualizar_campo(imeiWom, 'fecha_declaracion_generada', fechaEnvio);
-            const idx = registros.findIndex(r => r.imei === imeiWom);
-            if (idx !== -1) {
-                registros[idx].fecha_declaracion_generada = fechaEnvio;
-                registros[idx].fecha_correo_wom = fechaEnvio;
-                renderizarTabla();
+        // Actualizar estado local inmediatamente (amarillo) sin esperar la BD
+        const idxLocal = registros.findIndex(r => String(r.imei).trim() === String(imeiWom).trim());
+        const idxActual = (indiceDetallesActual !== null && idxLocal === -1) ? indiceDetallesActual : idxLocal;
+        if (idxActual !== null && idxActual !== -1 && registros[idxActual]) {
+            registros[idxActual].fecha_correo_wom = fechaEnvio;
+            registros[idxActual].correo_enviado = true;
+            if (!registros[idxActual].fecha_declaracion_generada) {
+                registros[idxActual].fecha_declaracion_generada = fechaEnvio;
             }
-            showToast('Correo enviado — Trámite en proceso (Amarillo)', 'email');
-        } catch (e) {
-            console.warn('No se pudo actualizar fecha de correo:', e);
+            actualizarWidgetInteligente(registros[idxActual]);
         }
+        // Renderizar tabla siempre para reflejar el color amarillo
+        renderizarTabla();
+
+        // Persistir en BD (best-effort, no bloquea la UI)
+        try {
+            await window.pywebview.api.actualizar_campo(imeiWom, 'fecha_declaracion_generada', fechaEnvio);
+            await window.pywebview.api.actualizar_campo(imeiWom, 'correo_enviado', true);
+        } catch (e) {
+            console.warn('No se pudo persistir fecha/estado de correo en BD:', e);
+        }
+        showToast('Correo enviado — Trámite en proceso (Amarillo)', 'email');
     } else {
         showToast(res.mensaje, 'error');
     }
@@ -3580,10 +3659,16 @@ function mostrarSelectorLineasNeon(operador, lineas, callback) {
     document.getElementById('lineSelectorOverlay').classList.add('active');
 }
 
-function ejecutarRegistroWom() {
-    if (indiceDetallesActual === null || !registros[indiceDetallesActual]) return;
-    const regActual = registros[indiceDetallesActual];
-    const imei = regActual.imei;
+async function ejecutarRegistroWomPorImei(imei) {
+    let regActual = registros.find(r => String(r.imei).trim() === String(imei).trim());
+    if (!regActual) {
+        await cargarDatos();
+        regActual = registros.find(r => String(r.imei).trim() === String(imei).trim());
+    }
+    if (!regActual) {
+        showToast("No se encontró el registro para WOM", "error");
+        return;
+    }
     const encNombre = regActual.encargado;
     if (!encNombre) return showToast("Asigna un encargado primero", "warning");
     const enc = todosLosEncargados.find(e => e.nombre === encNombre);
@@ -3596,22 +3681,7 @@ function ejecutarRegistroWom() {
     }
     
     const persistirYRegistrar = async (l) => {
-        showToast("Registrando en FastReg y arrancando Selenium (WOM)...", "info");
-        try {
-            if (typeof window.pywebview.api.guardar_en_fastreg === 'function') {
-                await window.pywebview.api.guardar_en_fastreg({
-                    imei: imei,
-                    operador: 'WOM',
-                    linea: l,
-                    encargado: encNombre,
-                    modelo: regActual.modelo || '',
-                    cliente: regActual.cliente || 'Anónimo',
-                    razon: 'Registro WOM'
-                });
-            }
-        } catch (e) {
-            console.warn('Error guardando en FastReg:', e);
-        }
+        showToast("Arrancando Selenium (WOM)...", "info");
         await window.pywebview.api.registrar_wom(imei, l);
         if (typeof window.marcarBotonRefrescarDisponible === 'function') window.marcarBotonRefrescarDisponible();
     };
@@ -3623,6 +3693,13 @@ function ejecutarRegistroWom() {
     } else {
         showToast("El encargado no tiene líneas WOM guardadas.", "warning");
     }
+}
+window.ejecutarRegistroWomPorImei = ejecutarRegistroWomPorImei;
+
+function ejecutarRegistroWom() {
+    if (indiceDetallesActual === null || !registros[indiceDetallesActual]) return;
+    const regActual = registros[indiceDetallesActual];
+    ejecutarRegistroWomPorImei(regActual.imei);
 }
 
 function ejecutarRegistroEtb() {
@@ -3641,22 +3718,7 @@ function ejecutarRegistroEtb() {
     }
 
     const persistirYRegistrar = async (l) => {
-        showToast("Registrando en FastReg y arrancando Selenium (ETB)...", "info");
-        try {
-            if (typeof window.pywebview.api.guardar_en_fastreg === 'function') {
-                await window.pywebview.api.guardar_en_fastreg({
-                    imei: imei,
-                    operador: 'ETB',
-                    linea: l,
-                    encargado: encNombre,
-                    modelo: regActual.modelo || '',
-                    cliente: regActual.cliente || 'Anónimo',
-                    razon: 'Registro ETB'
-                });
-            }
-        } catch (e) {
-            console.warn('Error guardando en FastReg:', e);
-        }
+        showToast("Arrancando Selenium (ETB)...", "info");
         await window.pywebview.api.registrar_etb(imei, l);
         if (typeof window.marcarBotonRefrescarDisponible === 'function') window.marcarBotonRefrescarDisponible();
     };
@@ -3702,9 +3764,21 @@ window.addEventListener('load', () => {
 
 /* Cerrar modales al hacer clic en overlay */
 document.addEventListener('mousedown', (e) => {
-    // No cerrar el selector de encargado con el mousedown global —
-    // él se cierra solo con su propio onclick en el HTML
+    // No cerrar el selector de encargado con el mousedown global
     if (e.target.id === 'encargadoSelectorOverlay') return;
+
+    if (e.target.id === 'personalOverlay') {
+        const vistaForm = document.getElementById('personalVistaForm');
+        if (vistaForm && !vistaForm.classList.contains('hidden')) {
+            // Clic fuera del modal mientras el formulario está abierto → volver a la lista
+            volverPersonalLista();
+        } else {
+            // Clic fuera mientras la lista está visible → cerrar el overlay
+            e.target.classList.remove('active');
+        }
+        return; // Siempre cortamos aquí para personalOverlay
+    }
+
     if (e.target.classList.contains('modal-overlay')) {
         e.target.classList.remove('active');
     }
@@ -6207,8 +6281,10 @@ function formatNotificationText(notif) {
     }
 }
 
-async function cargarNotificaciones() {
-    console.log("[REALTIME] [JS] Iniciando cargarNotificaciones...");
+// silent=true → solo sincroniza IDs y renderiza, NO muestra toasts
+// (usar cuando el usuario abre el modal manualmente o se registra un nuevo trabajo)
+async function cargarNotificaciones(silent = false) {
+    console.log("[REALTIME] [JS] Iniciando cargarNotificaciones (silent=" + silent + ")...");
     // Solo cargar si el usuario está autenticado
     if (!currentUser) return;
     if (!window.pywebview || !window.pywebview.api) {
@@ -6225,14 +6301,15 @@ async function cargarNotificaciones() {
             listNotificaciones = Array.isArray(rawData) ? rawData : [];
             console.log(`[REALTIME] [JS] Notificaciones asignadas: ${listNotificaciones.length} elementos.`);
 
-            // Detect and trigger real-time toasts for new notifications
+            // Registrar IDs vistos; solo mostrar toast si NO es silencioso y NO es la primera carga
             listNotificaciones.forEach(notif => {
                 try {
                     const notifId = getNotifField(notif, 'id');
                     const razon = (getNotifField(notif, 'razon') || '').toString().trim().toLowerCase();
                     if (notifId && !seenNotificationIds.has(notifId)) {
                         seenNotificationIds.add(notifId);
-                        if (!isFirstNotificationLoad) {
+                        // Solo mostrar toast si fue enviado por realtime (no por carga manual/modal)
+                        if (!isFirstNotificationLoad && !silent) {
                             showToast(
                                 formatNotificationText(notif),
                                 razon === 'solicitud' ? 'bell' : (razon === 'desbloqueo' ? 'unlocked' : 'locked')
@@ -6391,7 +6468,8 @@ function toggleNotificacionesModal(event) {
     const isVisible = modal.style.display === 'flex';
     if (!isVisible) {
         modal.style.display = 'flex';
-        cargarNotificaciones();
+        // silent=true: al abrir el modal manualmente no mostramos toasts para notificaciones existentes
+        cargarNotificaciones(true);
     } else {
         modal.style.display = 'none';
     }

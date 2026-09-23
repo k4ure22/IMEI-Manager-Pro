@@ -19,6 +19,31 @@ try:
 except ImportError:
     HAS_FPDF = False
 
+def get_arial_ttf_path():
+    """Busca Arial.ttf en rutas estándar de Windows, macOS y Linux."""
+    candidates = [
+        r'C:\Windows\Fonts\arial.ttf',
+        r'C:\Windows\Fonts\Arial.ttf',
+        '/Library/Fonts/Arial.ttf',
+        '/System/Library/Fonts/Supplemental/Arial.ttf',
+        '/System/Library/Fonts/Arial.ttf',
+        '/usr/share/fonts/truetype/msttcorefonts/Arial.ttf',
+        '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+    ]
+    # Buscar también junto al ejecutable o script (en caso de distribución con fuentes bundleadas)
+    if hasattr(sys, '_MEIPASS'):
+        base = sys._MEIPASS
+    else:
+        base = os.path.dirname(os.path.abspath(__file__))
+    for rel in ['fonts/Arial.ttf', '../Views/Files/fonts/Arial.ttf', '../fonts/Arial.ttf']:
+        p = os.path.normpath(os.path.join(base, rel))
+        if os.path.exists(p):
+            return p
+    for p in candidates:
+        if os.path.exists(p):
+            return p
+    return None
+
 def load_best_font(font_name, size):
     try:
         from PIL import ImageFont
@@ -186,18 +211,30 @@ def generar_pdf(datos):
     try:
         pdf = FPDF(orientation='L', unit='mm', format='A4')
         pdf.add_page()
+
+        # Registrar Arial con TTF para soporte correcto de tildes en Windows/macOS
+        _arial_ttf = get_arial_ttf_path()
+        _font_name = 'Helvetica'  # fallback seguro universal
+        if _arial_ttf:
+            try:
+                pdf.add_font('Arial', '', _arial_ttf, uni=True)
+                pdf.add_font('Arial', 'B', _arial_ttf, uni=True)
+                pdf.add_font('Arial', 'I', _arial_ttf, uni=True)
+                _font_name = 'Arial'
+            except Exception:
+                _font_name = 'Helvetica'
         
         operador = datos.get('operador', '').lower()
         if operador:
             if hasattr(sys, '_MEIPASS'):
                 logo_path = os.path.join(sys._MEIPASS, "Views", "icons", f"{operador}.png")
-                # Fallback macos
+                # Fallback macOS bundle
                 if not os.path.exists(logo_path):
                     logo_path = os.path.abspath(os.path.join(sys._MEIPASS, "..", "Resources", "Views", "icons", f"{operador}.png"))
             else:
                 base_dir = os.path.dirname(os.path.abspath(__file__))
-                logo_path = os.path.join(base_dir, "..", "Views", "icons", f"{operador}.png")
-                
+                logo_path = os.path.normpath(os.path.join(base_dir, "..", "Views", "icons", f"{operador}.png"))
+
             if os.path.exists(logo_path):
                 try:
                     from PIL import Image
@@ -235,19 +272,19 @@ def generar_pdf(datos):
         linea_usuario = datos.get('linea_usuario', '')
 
         if modo == 'estandar':
-            pdf.set_font("Arial", 'B', 22)
+            pdf.set_font(_font_name, 'B', 22)
             pdf.ln(5)
             pdf.cell(0, 10, "CONSTANCIA DE REGISTRO DE IMEI", ln=True, align='L')
             pdf.cell(0, 10, "DECLARACION SIMPLIFICADA", ln=True, align='L')
             
             pdf.set_y(65)
-            pdf.set_font("Arial", '', 14)
+            pdf.set_font(_font_name, '', 14)
             pdf.cell(0, 10, f"El IMEI {imei} ha sido registrado de manera exitosa.", ln=True, align='L')
             pdf.ln(5)
             
-            pdf.set_font("Arial", 'B', 12)
+            pdf.set_font(_font_name, 'B', 12)
             pdf.cell(0, 8, "Datos ingresados:", ln=True, align='L')
-            pdf.set_font("Arial", '', 12)
+            pdf.set_font(_font_name, '', 12)
             
             if nombre and nombre.strip() != 'ANONIMO' and nombre.strip() != 'ANÓNIMO':
                 pdf.cell(0, 8, f"- Propietario: {nombre}", ln=True, align='L')
@@ -263,10 +300,10 @@ def generar_pdf(datos):
                 pdf.cell(0, 8, f"- Operador: {operador.upper()}", ln=True, align='L')
             
             pdf.ln(10)
-            pdf.set_font("Arial", 'I', 11)
+            pdf.set_font(_font_name, 'I', 11)
             pdf.cell(0, 10, f"Fecha de emision: {fecha_actual}", ln=True, align='L')
         else:
-            pdf.set_font("Arial", 'B', 22)
+            pdf.set_font(_font_name, 'B', 22)
             pdf.ln(5)
             pdf.cell(0, 10, "DECLARACION DE PROPIEDAD DE EQUIPO", ln=True, align='L')
             pdf.cell(0, 10, "TERMINAL MOVIL", ln=True, align='L')
@@ -293,11 +330,11 @@ def generar_pdf(datos):
             
             # Bajar el inicio del texto para que no se superponga con el logo superior derecho
             pdf.set_y(65)
-            pdf.set_font("Arial", '', 11)
+            pdf.set_font(_font_name, '', 11)
             pdf.multi_cell(0, 7, texto_declaracion, align='J')
             
             pdf.ln(10)
-            pdf.set_font("Arial", 'I', 10)
+            pdf.set_font(_font_name, 'I', 10)
             pdf.cell(0, 10, f"Fecha de emision de la declaracion: {fecha_actual}", ln=True, align='R')
         
         salida_dir = datos.get('salida_dir')

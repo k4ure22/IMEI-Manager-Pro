@@ -17,11 +17,19 @@ wdm_datas, wdm_binaries, wdm_hidden = collect_all('webdriver_manager')
 # Archivos y carpetas adicionales que deben ser empaquetados (sin archivos .py sueltos para proteger el código fuente)
 mis_datas = [
     ('Views', 'Views'),
+]
+for src, dst in [
     ('Controllers/BiometricAuth.swift', '.'),
     ('logoIMPlight.png', '.'),
     ('logoIMPdark.png', '.'),
+    ('IMP_Logo_final.png', '.'),
+    ('IMPLOGO.icns', '.'),
     ('logoIMPlight.icns', '.'),
-] + selenium_datas + wdm_datas
+]:
+    if os.path.exists(src):
+        mis_datas.append((src, dst))
+
+mis_datas += selenium_datas + wdm_datas
 
 scripts_to_analyze = [
     'Controllers/main.py',

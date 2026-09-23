@@ -13,12 +13,22 @@ from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 
 def get_font(size=24, bold=False):
-    """Obtiene fuentes TrueType de alta calidad del sistema"""
+    """Obtiene fuentes TrueType de alta calidad del sistema (Windows, macOS, Linux)"""
+    windir = os.environ.get('WINDIR', r'C:\Windows')
     possible_fonts = [
+        # macOS
         '/System/Library/Fonts/Supplemental/Arial Bold.ttf' if bold else '/System/Library/Fonts/Supplemental/Arial.ttf',
+        '/Library/Fonts/Arial Bold.ttf' if bold else '/Library/Fonts/Arial.ttf',
         '/System/Library/Fonts/Supplemental/Verdana.ttf',
         '/System/Library/Fonts/Helvetica.ttc',
-        r'C:\Windows\Fonts\arialbd.ttf' if bold else r'C:\Windows\Fonts\arial.ttf'
+        # Windows
+        os.path.join(windir, 'Fonts', 'arialbd.ttf' if bold else 'arial.ttf'),
+        os.path.join(windir, 'Fonts', 'Arialbd.ttf' if bold else 'Arial.ttf'),
+        os.path.join(windir, 'Fonts', 'segoeuib.ttf' if bold else 'segoeui.ttf'),
+        os.path.join(windir, 'Fonts', 'calibrib.ttf' if bold else 'calibri.ttf'),
+        # Linux
+        '/usr/share/fonts/truetype/msttcorefonts/Arial_Bold.ttf' if bold else '/usr/share/fonts/truetype/msttcorefonts/Arial.ttf',
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf' if bold else '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
     ]
     for font_path in possible_fonts:
         if os.path.exists(font_path):
@@ -48,7 +58,8 @@ def estilizar_pantallazo(screenshot_path: str, datos: dict) -> str:
         return screenshot_path
 
     try:
-        raw_img = Image.open(screenshot_path).convert("RGBA")
+        with Image.open(screenshot_path) as _opened_img:
+            raw_img = _opened_img.convert("RGBA")
     except Exception as e:
         print(f"[WARN] Error abriendo imagen para estilizar: {e}")
         return screenshot_path

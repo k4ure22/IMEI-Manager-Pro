@@ -31,7 +31,7 @@ def leer_estado() -> dict:
     _asegurar_directorio()
     if os.path.exists(ARCHIVO_ESTADO):
         try:
-            with open(ARCHIVO_ESTADO, "r") as f:
+            with open(ARCHIVO_ESTADO, "r", encoding="utf-8") as f:
                 estado = json.load(f)
                 # Asegurar que tiene todas las claves necesarias
                 if "consultas_restantes" not in estado:
@@ -49,7 +49,7 @@ def leer_estado() -> dict:
 
 def guardar_estado(estado: dict):
     _asegurar_directorio()
-    with open(ARCHIVO_ESTADO, "w") as f:
+    with open(ARCHIVO_ESTADO, "w", encoding="utf-8") as f:
         json.dump(estado, f, indent=2)
 
 def verificar_y_resetear_si_necesario(estado: dict) -> dict:

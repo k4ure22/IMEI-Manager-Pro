@@ -12,10 +12,19 @@ wdm_datas, wdm_binaries, wdm_hidden = collect_all('webdriver_manager')
 # Archivos y carpetas adicionales empaquetados (sin archivos .py sueltos para proteger el código fuente)
 mis_datas = [
     ('Views', 'Views'),
+]
+for src, dst in [
     ('Controllers/logoIMPlight.ico', 'Controllers'),
     ('logoIMPlight.png', '.'),
     ('logoIMPdark.png', '.'),
-] + selenium_datas + wdm_datas
+    ('IMP_Logo_final.png', '.'),
+    ('logoIMPlight.ico', '.'),
+    ('logo.ico', '.'),
+]:
+    if os.path.exists(src):
+        mis_datas.append((src, dst))
+
+mis_datas += selenium_datas + wdm_datas
 
 if os.path.exists('Models'):
     mis_datas.append(('Models', 'Models'))

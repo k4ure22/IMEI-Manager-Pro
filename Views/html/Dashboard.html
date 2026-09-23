@@ -18,6 +18,8 @@
             }
         })();
     </script>
+    <link rel="icon" type="image/png" href="../icons/logo.png">
+    <link rel="apple-touch-icon" href="../icons/logo.png">
     <link rel="stylesheet" href="../css/dashboard.css">
     <script src="https://cdn.tailwindcss.com" defer></script>
     <script src="../js/dashboard.js?v=2" defer></script>
@@ -132,7 +134,7 @@
                 </path>
             </svg>
             <span id="badgeRefrescarNuevos"
-                class="hidden absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-400 border border-black animate-ping"></span>
+                class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-black shadow-[0_0_8px_#34d399]"></span>
         </button>
 
         <!-- Botón Toggle: Gestor / Registros -->
@@ -321,7 +323,7 @@
                                 <div class="flex flex-col">
                                     <span class="text-[9px] uppercase font-black tracking-widest opacity-40">Modelo
                                         Detectado</span>
-                                    <span id="txtModeloResult" class="text-sm font-bold" style="color:#67e8f9"></span>
+                                    <span id="txtModeloResult" class="text-sm font-bold cursor-pointer hover:underline" style="color:#67e8f9" onclick="navigator.clipboard.writeText(this.innerText).then(()=>showToast('Modelo copiado','copy'))" title="Copiar Modelo"></span>
                                 </div>
                                 <a id="btnManualModelo" href="#" target="_blank"
                                     class="p-2 bg-white/5 hover:bg-white/10 rounded-lg transition"
@@ -403,6 +405,25 @@
                                 </svg>
                             </div>
                             <span class="text-[10px] font-black uppercase tracking-wider">Definitivo</span>
+                        </div>
+                    </div>
+
+                    <!-- Slider Operador (visible solo si razón == Bloqueo) -->
+                    <div id="seccionOperadorBloqueo" class="hidden mt-3 pt-3 border-t border-white/5 flex flex-col gap-2">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-black uppercase tracking-wider opacity-60 flex items-center gap-1.5">
+                                <span class="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+                                Operador
+                            </span>
+                        </div>
+                        <div class="operador-slider-container">
+                            <button type="button" class="operador-slider-btn active" id="btnOpEtb" onclick="seleccionarOperadorBloqueo('ETB')">
+                                ETB
+                            </button>
+                            <button type="button" class="operador-slider-btn" id="btnOpWom" onclick="seleccionarOperadorBloqueo('WOM')">
+                                WOM
+                            </button>
+                            <div class="operador-slider-pill pos-etb" id="operadorSliderPill"></div>
                         </div>
                     </div>
                 </div>
@@ -618,9 +639,14 @@
                             </h3>
                             <div class="space-y-5 flex-1">
                                 <div>
-                                    <label
-                                        class="block text-[11px] font-bold uppercase tracking-wider opacity-50 mb-2 ml-1">Modelo
-                                        del Equipo</label>
+                                    <label id="lblDetModelo"
+                                        class="block text-[11px] font-bold uppercase tracking-wider opacity-50 mb-2 ml-1 cursor-pointer hover:opacity-100 transition-opacity flex items-center gap-1.5"
+                                        onclick="copiarModeloDetalles()" title="Copiar Modelo">
+                                        Modelo del Equipo
+                                        <svg class="w-3.5 h-3.5 opacity-60 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path>
+                                        </svg>
+                                    </label>
                                     <div class="relative flex items-center">
                                         <input type="text" id="detModelo"
                                             class="input-glass w-full p-3.5 pr-28 rounded-2xl text-base font-semibold shadow-inner"
@@ -894,7 +920,7 @@
 
             <div class="personal-body">
                 <div id="personalVistaLista">
-                    <div id="personalGrid" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-5"></div>
+                    <div id="personalGrid" class="w-full"></div>
                 </div>
 
                 <div id="personalVistaForm" class="hidden">
@@ -3667,7 +3693,7 @@
                                 </svg>
                             </div>
                             <span class="ck-action-label">IMEI Colombia</span>
-                            <span style="font-size:8px;opacity:0.5;letter-spacing:0.05em;">estado + pantallazo</span>
+                            <span style="font-size:8px;opacity:0.5;letter-spacing:0.05em;">estado y operador</span>
                         </button>
 
                         <!-- Botón Blacklist (ACTIVO) -->

@@ -56,7 +56,7 @@ def leer_estado() -> dict:
     _asegurar_dir()
     if os.path.exists(ARCHIVO_ESTADO):
         try:
-            with open(ARCHIVO_ESTADO, "r") as f:
+            with open(ARCHIVO_ESTADO, "r", encoding="utf-8") as f:
                 estado = json.load(f)
                 if "consultas_restantes" not in estado:
                     estado["consultas_restantes"] = LIMITE_CONSULTAS
@@ -74,7 +74,7 @@ def leer_estado() -> dict:
 
 def guardar_estado(estado: dict):
     _asegurar_dir()
-    with open(ARCHIVO_ESTADO, "w") as f:
+    with open(ARCHIVO_ESTADO, "w", encoding="utf-8") as f:
         json.dump(estado, f, indent=2)
 
 

@@ -274,7 +274,7 @@ async function ckConsultarModeloEstandar() {
     await ckActualizarCupos();
 }
 
-/* ─── CONSULTAR IMEI COLOMBIA (ScraperEstado + screenshot) ─── */
+/* ─── CONSULTAR IMEI COLOMBIA (solo estado en texto, sin pantallazo) ─── */
 async function ckConsultarImeiColombia() {
     const imei = ckGetIMEI();
     if (!imei) return;
@@ -283,14 +283,14 @@ async function ckConsultarImeiColombia() {
     ckMostrarResultado({
         iconClass: 'ck-icon-loading',
         label: 'Consultando IMEI Colombia...',
-        value: 'Tomando pantallazo del resultado',
+        value: 'Verificando estado del equipo',
         loading: true
     });
 
     showToastLoading('Consultando estado en IMEI Colombia...');
 
     try {
-        const res = await window.pywebview.api.consultar_imei_colombia_con_pantallazo(imei, ckIsHeadless());
+        const res = await window.pywebview.api.consultar_estado_imei_colombia(imei, ckIsHeadless());
         hideToastLoading();
 
         if (res.status === 'success') {
@@ -303,10 +303,6 @@ async function ckConsultarImeiColombia() {
                     { label: 'IMEI', value: imei }
                 ]
             });
-
-            if (res.screenshot_path) {
-                ckMostrarScreenshot(res.screenshot_path);
-            }
 
             showToast(`Estado: ${res.estado} | ${res.operador}`, 'success');
 

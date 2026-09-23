@@ -76,10 +76,23 @@ def crear_driver(headless: bool = False):
     options.add_argument("--disable-dev-shm-usage")
     options.page_load_strategy = 'eager'
 
+    driver = None
     driver_path = get_chromedriver_path()
     log(f"Usando chromedriver: {driver_path}")
 
-    driver = webdriver.Chrome(service=Service(driver_path), options=options)
+    try:
+        driver = webdriver.Chrome(service=Service(driver_path), options=options)
+    except Exception as de:
+        log(f"Chromedriver en {driver_path} no compatible o falló ({de}). Reintentando con ChromeDriverManager...")
+        try:
+            from webdriver_manager.chrome import ChromeDriverManager
+            wdm_path = ChromeDriverManager().install()
+            log(f"Nuevo chromedriver instalado: {wdm_path}")
+            driver = webdriver.Chrome(service=Service(wdm_path), options=options)
+        except Exception as cde:
+            log(f"ChromeDriverManager falló: {cde}. Intentando con Selenium Manager por defecto...")
+            driver = webdriver.Chrome(options=options)
+
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
         "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
     })
@@ -98,7 +111,14 @@ def crear_driver(headless: bool = False):
 
 def consultar_modelos(imeis, headless: bool = False):
     log("Iniciando Chrome con Stealth...")
-    driver, wait = crear_driver(headless=headless)
+    driver = None
+    try:
+        driver, wait = crear_driver(headless=headless)
+    except Exception as init_err:
+        log(f"Error fatal inicializando Chrome: {init_err}")
+        for imei in imeis:
+            print(json.dumps({"imei": imei, "modelo": "Error", "pantallazo": ""}), flush=True)
+        return
 
     # Crear directorio temporal para los pantallazos en la misma ruta del script
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -108,8 +128,11 @@ def consultar_modelos(imeis, headless: bool = False):
     try:
         log("Navegando a movical.net...")
         driver.get("https://www.movical.net")
-        input_field = wait.until(EC.element_to_be_clickable((By.ID, "searchomeinput")))
-        log("Input listo")
+        try:
+            input_field = wait.until(EC.element_to_be_clickable((By.ID, "searchomeinput")))
+            log("Input listo")
+        except Exception as e_inp:
+            log(f"No se encontró el input inicial: {e_inp}")
 
         for imei in imeis:
             # Añadimos la clave pantallazo vacía por defecto
@@ -153,11 +176,16 @@ def consultar_modelos(imeis, headless: bool = False):
 
             print(json.dumps(resultado), flush=True)
 
+    except Exception as general_err:
+        log(f"Error general en consulta: {general_err}")
+        for imei in imeis:
+            print(json.dumps({"imei": imei, "modelo": "Error", "pantallazo": ""}), flush=True)
     finally:
-        try:
-            driver.quit()
-        except:
-            pass
+        if driver:
+            try:
+                driver.quit()
+            except:
+                pass
         log("Chrome cerrado")
 
 if __name__ == "__main__":
