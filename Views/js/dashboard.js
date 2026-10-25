@@ -267,67 +267,80 @@ function hideSplash() {
     setTimeout(() => { s.style.display = 'none'; }, 560);
 }
 
+function _callWithTimeout(promise, ms, fallbackValue = null) {
+    let timer;
+    const timeout = new Promise(resolve => {
+        timer = setTimeout(() => resolve(fallbackValue), ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 async function initApp() {
     if (_appInited) return;
     _appInited = true;
 
-    const temaGuardado = localStorage.getItem('imei-theme') || 'dark';
-    document.documentElement.setAttribute('data-theme', temaGuardado);
-    actualizarBotonTema(temaGuardado);
-    actualizarTodosLosIconos();
-    actualizarBotonHeadless();
-    actualizarTextoOrden();
-
-    document.title = "IMEI Manager Pro";
-
-    // Verificar estado de la Base de Datos en el inicio
     try {
-        const stateRes = await window.pywebview.api.obtener_estado_bd();
-        if (stateRes && stateRes.status === 'success') {
-            currentDbStatus = stateRes.db_status;
-            actualizarVisualizacionEstadoBD(currentDbStatus);
-            if (currentDbStatus === 'paused') {
-                hideSplash();
-                // No-admin: mostrar pantalla de mantenimiento y no continuar
-                // Admin: permitir continuar al login para que pueda reactivar
-                mostrarPantallaMantenimiento(stateRes.maintenance_until || '');
-                return;
+        const temaGuardado = localStorage.getItem('imei-theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', temaGuardado);
+        try { actualizarBotonTema(temaGuardado); } catch(e) {}
+        try { actualizarTodosLosIconos(); } catch(e) {}
+        try { actualizarBotonHeadless(); } catch(e) {}
+        try { actualizarTextoOrden(); } catch(e) {}
+
+        document.title = "IMEI Manager Pro";
+
+        // Verificar estado de la Base de Datos en el inicio con timeout seguro (máx 2.5s)
+        if (window.pywebview && window.pywebview.api && typeof window.pywebview.api.obtener_estado_bd === 'function') {
+            try {
+                const stateRes = await _callWithTimeout(window.pywebview.api.obtener_estado_bd(), 2500, null);
+                if (stateRes && stateRes.status === 'success') {
+                    currentDbStatus = stateRes.db_status;
+                    actualizarVisualizacionEstadoBD(currentDbStatus);
+                    if (currentDbStatus === 'paused') {
+                        hideSplash();
+                        mostrarPantallaMantenimiento(stateRes.maintenance_until || '');
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.error("Error al obtener estado inicial de la BD:", e);
             }
         }
-    } catch (e) {
-        console.error("Error al obtener estado inicial de la BD:", e);
-    }
 
-    // Verificar soporte de huella digital (Touch ID)
-    await verificarSoporteBiometrico();
+        // Verificar soporte de huella digital (Touch ID) con timeout
+        try {
+            await _callWithTimeout(verificarSoporteBiometrico(), 1200, null);
+        } catch (e) {}
 
-    // Sincronizar sesión persistida desde disco (FilesIMP/session_cache.json) hacia localStorage
-    try {
-        if (window.pywebview && window.pywebview.api && typeof window.pywebview.api.obtener_sesion_local === 'function') {
-            const diskRes = await window.pywebview.api.obtener_sesion_local();
-            if (diskRes && diskRes.status === 'success' && diskRes.session) {
-                localStorage.setItem('imei-last-session', JSON.stringify(diskRes.session));
-            } else {
-                const lsSessionStr = localStorage.getItem('imei-last-session');
-                if (lsSessionStr) {
-                    try {
-                        const lsSession = JSON.parse(lsSessionStr);
-                        if (lsSession && lsSession.email && typeof window.pywebview.api.guardar_sesion_local === 'function') {
-                            await window.pywebview.api.guardar_sesion_local(lsSession);
-                        }
-                    } catch (e) {}
+        // Sincronizar sesión persistida desde disco hacia localStorage con timeout
+        try {
+            if (window.pywebview && window.pywebview.api && typeof window.pywebview.api.obtener_sesion_local === 'function') {
+                const diskRes = await _callWithTimeout(window.pywebview.api.obtener_sesion_local(), 1500, null);
+                if (diskRes && diskRes.status === 'success' && diskRes.session) {
+                    localStorage.setItem('imei-last-session', JSON.stringify(diskRes.session));
+                } else {
+                    const lsSessionStr = localStorage.getItem('imei-last-session');
+                    if (lsSessionStr) {
+                        try {
+                            const lsSession = JSON.parse(lsSessionStr);
+                            if (lsSession && lsSession.email && typeof window.pywebview.api.guardar_sesion_local === 'function') {
+                                _callWithTimeout(window.pywebview.api.guardar_sesion_local(lsSession), 1500, null);
+                            }
+                        } catch (e) {}
+                    }
                 }
             }
+        } catch (e) {
+            console.warn("Sincronización de sesión:", e);
         }
-    } catch (e) {
-        console.warn("Sincronización de sesión:", e);
+    } catch (err) {
+        console.error("[initApp] Excepción capturada en inicialización:", err);
+    } finally {
+        // GARANTIZADO: En cualquier escenario, desvanecer splash y mostrar Login
+        window.usuarioRecordadoRechazado = false;
+        hideSplash();
+        mostrarPantallaLogin();
     }
-
-    // Siempre mostramos la pantalla de login; switchAuthMode detecta internamente
-    // si hay un usuario recordado y adapta el encabezado y los campos.
-    window.usuarioRecordadoRechazado = false;
-    hideSplash();
-    mostrarPantallaLogin();
 }
 
 function mostrarPantallaLogin() {
@@ -431,16 +444,39 @@ function cambiarClienteDesdeDetalles() {
     sel.focus();
 }
 
-// Polling robusto: espera hasta que window.pywebview.api esté disponible.
+let _apiReadyTriggered = false;
+function triggerInitApp() {
+    if (_apiReadyTriggered) return;
+    _apiReadyTriggered = true;
+    initApp();
+}
+
+// 1. Escuchar evento nativo 'pywebviewready' (clave para EdgeChromium en Windows)
+window.addEventListener('pywebviewready', () => {
+    console.log("[OK] [JS] Evento nativo 'pywebviewready' detectado");
+    triggerInitApp();
+});
+
+// 2. Polling continuo de respaldo
 (function waitForApi() {
-    if (window.pywebview && window.pywebview.api && window.pywebview.api.obtener_registros) {
-        console.log("[OK] [JS] API Totalmente Lista y Detectada");
-        initApp();
+    if (window.pywebview && window.pywebview.api) {
+        console.log("[OK] [JS] API pywebview lista detectada por polling");
+        triggerInitApp();
         return;
     }
-    // Si no está lista, reintentamos en 100ms
-    setTimeout(waitForApi, 100);
+    setTimeout(waitForApi, 80);
 })();
+
+// 3. Watchdog supremo de seguridad: tras 3.5 segundos forzar desvanecimiento del splash
+setTimeout(() => {
+    const s = document.getElementById('splashOverlay');
+    if (s && s.style.display !== 'none' && s.style.opacity !== '0') {
+        console.warn("[Watchdog] Tiempo de espera del splash excedido (3.5s). Forzando entrada a Login.");
+        triggerInitApp();
+        hideSplash();
+        mostrarPantallaLogin();
+    }
+}, 3500);
 
 document.addEventListener('DOMContentLoaded', () => {
     const t = document.documentElement.getAttribute('data-theme') || 'dark';

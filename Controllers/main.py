@@ -5769,5 +5769,5 @@ if __name__ == '__main__':
         maximized=True
     )
     api.set_window(ventana)
-
-    webview.start(debug=False, gui=_get_webview_gui())
+    debug_mode = ('--debug' in sys.argv) or (sys.platform == "win32")
+    webview.start(debug=debug_mode, gui=_get_webview_gui())
