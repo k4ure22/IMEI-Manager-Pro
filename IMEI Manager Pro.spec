@@ -14,6 +14,7 @@ from PyInstaller.utils.hooks import collect_all
 selenium_datas, selenium_binaries, selenium_hidden = collect_all('selenium')
 wdm_datas, wdm_binaries, wdm_hidden = collect_all('webdriver_manager')
 pypdfium2_datas, pypdfium2_binaries, pypdfium2_hidden = collect_all('pypdfium2')
+webview_datas, webview_binaries, webview_hidden = collect_all('webview')
 
 # Archivos y carpetas adicionales que deben ser empaquetados (sin archivos .py sueltos para proteger el código fuente)
 mis_datas = [
@@ -30,7 +31,7 @@ for src, dst in [
     if os.path.exists(src):
         mis_datas.append((src, dst))
 
-mis_datas += selenium_datas + wdm_datas + pypdfium2_datas
+mis_datas += selenium_datas + wdm_datas + pypdfium2_datas + webview_datas
 
 scripts_to_analyze = [
     'Controllers/main.py',
@@ -122,10 +123,10 @@ hidden_imports = [
     # unittest es requerido por pyparsing (dependencia transitiva de supabase/storage3)
     'unittest',
     'unittest.mock',
-] + selenium_hidden + wdm_hidden + pypdfium2_hidden
+] + selenium_hidden + wdm_hidden + pypdfium2_hidden + webview_hidden
 
 chromedriver_bin = 'chromedriver'
-mis_binaries = [] + selenium_binaries + wdm_binaries + pypdfium2_binaries
+mis_binaries = [] + selenium_binaries + wdm_binaries + pypdfium2_binaries + webview_binaries
 if os.path.exists(chromedriver_bin):
     mis_binaries.append((chromedriver_bin, '.'))
 
