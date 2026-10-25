@@ -11,7 +11,9 @@ if errorlevel 1 (
 )
 
 if not exist "Controllers\temp_screenshots" mkdir "Controllers\temp_screenshots"
+if not exist "temp_screenshots" mkdir "temp_screenshots"
 if not exist "FilesIMP" mkdir "FilesIMP"
+if not exist "Resultados_Masivos" mkdir "Resultados_Masivos"
 
 python Controllers\main.py
 if errorlevel 1 (

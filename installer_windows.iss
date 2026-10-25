@@ -31,20 +31,27 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+Name: "installdeps"; Description: "Configurar dependencias del sistema (Google Chrome y Tesseract OCR)"; GroupDescription: "Componentes del entorno:"; Flags: unchecked
 
 [Files]
 ; Incluir todos los archivos generados por PyInstaller en dist\IMEI Manager Pro
 Source: "dist\IMEI Manager Pro\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "instalar_dependencias_windows.bat"; DestDir: "{app}"; Flags: ignoreversion
+Source: "LEEME-WINDOWS.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Dirs]
 Name: "{app}\FilesIMP"; Permissions: users-modify
+Name: "{app}\temp_screenshots"; Permissions: users-modify
 Name: "{app}\Controllers\temp_screenshots"; Permissions: users-modify
 Name: "{app}\Resultados_Masivos"; Permissions: users-modify
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\Configurar Dependencias (Chrome y OCR)"; Filename: "{app}\instalar_dependencias_windows.bat"; IconFilename: "{app}\{#MyAppExeName}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Filename: "{app}\{#MyAppExeName}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\instalar_dependencias_windows.bat"; Description: "Instalar dependencias necesarias (Google Chrome y Tesseract OCR)"; Flags: runhidden postinstall skipifsilent; Tasks: installdeps
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Filename: "{app}\{#MyAppExeName}"; Flags: nowait postinstall skipifsilent
+

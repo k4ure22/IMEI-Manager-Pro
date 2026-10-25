@@ -5,7 +5,7 @@
 Tienes 2 opciones para generar el ejecutable (.exe) y el instalador Setup:
 
 ────────────────────────────────────────────────────────────
-OPCIÓN 1: COMPILACIÓN AUTOMÁTICA EN GITHUB (RECOMENDADA) 🚀
+OPCIÓN 1: COMPILACIÓN AUTOMÁTICA EN GITHUB (RECOMENDADA) 
 ────────────────────────────────────────────────────────────
 No necesitas instalar Python ni Inno Setup en tu PC Windows. GitHub lo compila en la nube:
 
@@ -59,11 +59,14 @@ RESULTADOS GENERADOS:
 ────────────────────────────────────────────────────────────
 PROGRAMAS COMPLEMENTARIOS EN EL PC FINAL
 ────────────────────────────────────────────────────────────
-Para que todas las funciones operen al 100%:
+Puedes configurarlos en 1 solo clic ejecutando:
+👉 "instalar_dependencias_windows.bat" (como Administrador)
+
+O instalarlos manualmente:
   1. Google Chrome (para Selenium / automatizaciones).
-  2. Microsoft Edge WebView2 (generalmente ya viene con Windows 10/11).
-  3. Tesseract OCR (solo si usas resolución OCR de captchas de operadores):
+  2. Microsoft Edge WebView2 (generalmente ya viene integrado en Windows 10/11).
+  3. Tesseract OCR (para lectura OCR de captchas):
      https://github.com/UB-Mannheim/tesseract/wiki
-     Instalar en: C:\Program Files\Tesseract-OCR\
+     (Ubicación recomendada: C:\Program Files\Tesseract-OCR)
 
 ============================================================

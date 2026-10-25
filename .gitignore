@@ -36,3 +36,11 @@ scratch/
 # Logs
 logs/
 *.log
+
+# Credenciales y archivos generados locales
+.imp_credentials.json
+Controllers/.imp_credentials.json
+Views/Files/*.png
+Views/Files/*.jpg
+Views/Files/*.jpeg
+Views/Files/declaraciones_generadas/

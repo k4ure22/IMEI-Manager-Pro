@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <title>Preview Panel de Acciones Operativas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="../css/dashboard.css">
+    <style>
+        body {
+            background: #060913;
+            color: #fff;
+            font-family: system-ui, -apple-system, sans-serif;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            align-items: center;
+        }
+        .preview-wrapper {
+            width: 100%;
+            max-width: 950px;
+        }
+    </style>
+</head>
+<body>
+    <div class="flex gap-4">
+        <button onclick="document.documentElement.setAttribute('data-theme', 'dark');" class="px-4 py-2 bg-slate-800 text-white rounded font-bold">Dark Theme</button>
+        <button onclick="document.documentElement.setAttribute('data-theme', 'light');" class="px-4 py-2 bg-slate-200 text-black rounded font-bold">Light Theme</button>
+    </div>
+
+    <div class="preview-wrapper">
+        <div class="card-anim delay-3 md:col-span-2">
+            <div id="cardPanelOperativo"
+                onclick="handlePanelOperativoCardClick(event)"
+                class="p-8 rounded-3xl border purple-glow liquid-glass flex flex-col w-full shadow-2xl transition-all duration-300 cursor-pointer select-none"
+                style="background:var(--card-inner); border-color: var(--th-bd);">
+                <!-- Header con botón toggle -->
+                <div id="btnTogglePanelOp"
+                    class="w-full flex items-center justify-between group transition-all duration-200 hover:opacity-90 text-left">
+                    <h3 class="text-sm font-bold uppercase tracking-widest text-purple-400 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-width="2" />
+                        </svg>
+                        Panel de Acciones Operativas
+                    </h3>
+                    <div class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-purple-400/70 group-hover:text-purple-400 transition-colors">
+                        <span id="txtTogglePanelOp">Ocultar acciones operativas</span>
+                        <svg id="iconTogglePanelOp" class="w-4 h-4 transition-transform duration-300 rotate-180"
+                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </div>
+                </div>
+                <!-- Contenido colapsable -->
+                <div id="panelOperativoContent" class="overflow-hidden transition-all duration-500 ease-in-out cursor-default" style="max-height:800px; opacity:1; margin-top:1.5rem;">
+                    <div class="mt-4">
+                        <div id="panelOperativoInner" class="widget-inner" style="padding:0;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/dashboard.js"></script>
+    <script>
+        const dummyReg = {
+            imei: "352641351586685",
+            linea: "3001234567",
+            operador: "WOM",
+            ruta_declaracion_generada: "Views/Files/declaracion.pdf",
+            fecha_declaracion_generada: "23/10/2026"
+        };
+        if (typeof registros !== 'undefined') {
+            registros.length = 0;
+            registros.push(dummyReg);
+        }
+        indiceDetallesActual = 0;
+        _panelOperativoAbierto = true;
+        renderizarPanelOperativo(dummyReg);
+    </script>
+</body>
+</html>

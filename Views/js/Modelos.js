@@ -272,6 +272,17 @@ async function mdConsultarImeiColombia() {
 
             showToast(`Estado: ${res.estado} | ${res.operador}`, 'success');
 
+        } else if (res.status === 'pagina_alterada') {
+            if (typeof window.mostrarModalPaginaAlterada === 'function') {
+                window.mostrarModalPaginaAlterada(res.pagina || 'IMEI Colombia', res.detalle);
+            }
+            mdMostrarResultado({
+                iconClass: 'md-icon-error',
+                label: 'Página Modificada',
+                value: res.mensaje || 'La página ha sido modificada. Solicite soporte a Martin.'
+            });
+            showToast(res.mensaje || 'Página modificada', 'error');
+
         } else {
             mdMostrarResultado({
                 iconClass: 'md-icon-error',

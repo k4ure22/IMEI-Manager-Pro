@@ -11,3 +11,5 @@ pypdf
 reportlab
 certifi
 xlwings
+requests
+pypdfium2

@@ -33,7 +33,6 @@ def leer_estado() -> dict:
         try:
             with open(ARCHIVO_ESTADO, "r", encoding="utf-8") as f:
                 estado = json.load(f)
-                # Asegurar que tiene todas las claves necesarias
                 if "consultas_restantes" not in estado:
                     estado["consultas_restantes"] = LIMITE_CONSULTAS
                 if "ultimo_reset" not in estado:
@@ -53,9 +52,6 @@ def guardar_estado(estado: dict):
         json.dump(estado, f, indent=2)
 
 def verificar_y_resetear_si_necesario(estado: dict) -> dict:
-    """
-    Revisa si el período de 24h ya cumplió y limpia bloqueo si ya expiró.
-    """
     ahora = datetime.now()
 
     # Reset por tiempo del contador propio (24h desde último reset) si no hay bloqueo web futuro activo
@@ -81,10 +77,8 @@ def verificar_y_resetear_si_necesario(estado: dict) -> dict:
     return estado
 
 def calcular_tiempo_restante(estado: dict) -> dict:
-    """Calcula horas/minutos exactos hasta el fin del bloqueo o próximo reset."""
     ahora = datetime.now()
 
-    # 1. Si hay un bloqueo web activo en el futuro, calcular hasta ese momento exacto
     if estado.get("bloqueado_hasta"):
         try:
             bloqueado_hasta = datetime.fromisoformat(estado["bloqueado_hasta"])
@@ -95,7 +89,6 @@ def calcular_tiempo_restante(estado: dict) -> dict:
         except Exception:
             pass
 
-    # 2. Si los cupos están agotados, calcular 24h desde ultimo_reset
     if estado.get("consultas_restantes", LIMITE_CONSULTAS) <= 0:
         try:
             ultimo_reset = datetime.fromisoformat(estado.get("ultimo_reset", ahora.isoformat()))
@@ -109,39 +102,110 @@ def calcular_tiempo_restante(estado: dict) -> dict:
 
     return {"horas": 0, "minutos": 0}
 
-def validar_estado_pagina_web() -> dict:
-    """
-    Abre iunlocker.com en modo headless y valida si ya es hábil para consultas.
-    Si la página sigue reportando límite alcanzado:
-      - NO reinicia el conteo (mantiene 0 cupos).
-      - Extrae el tiempo restante que reporte el sitio o mantiene el bloqueo previo.
-      - Retorna {"habil": False, "status": "limite_web", ...}
-    Si la página está lista y sin mensaje de bloqueo:
-      - Reinicia el conteo a 5 cupos y limpia bloqueado_hasta.
-      - Retorna {"habil": True, "status": "success", ...}
-    """
-    estado = leer_estado()
+def _crear_chrome_options(headless: bool = True) -> Options:
     chrome_options = Options()
-    chrome_options.add_argument("--headless=new")
+    if headless:
+        chrome_options.add_argument("--headless=new")
+    else:
+        chrome_options.add_argument("--start-maximized")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--log-level=3")
     chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option("useAutomationExtension", False)
     chrome_options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     )
     prefs = {
-        "profile.managed_default_content_settings.images": 2,
-        "profile.managed_default_content_settings.stylesheet": 2
+        "profile.default_content_setting_values.notifications": 2,
     }
     chrome_options.add_experimental_option("prefs", prefs)
+    return chrome_options
 
+def cerrar_anuncio_si_aparece(driver) -> bool:
+    """
+    Detecta y cierra anuncios intersticiales (Google Vignette, popups, overlays de publicidad).
+    """
+    cerrado = False
+    selectores_dismiss = [
+        '//*[@id="dismiss-button"]',
+        '//div[@id="dismiss-button"]',
+        '//button[@id="dismiss-button"]',
+        '//*[@aria-label="Close ad"]',
+        '//*[@aria-label="Cerrar anuncio"]',
+        '//*[@aria-label="Close"]',
+        '//*[@aria-label="Cerrar"]',
+        '//div[contains(@class, "close-button")]',
+        '//div[contains(@class, "btn-close")]',
+        '//span[contains(@class, "close-icon")]',
+        '//div[contains(@id, "close")]'
+    ]
+    for sel in selectores_dismiss:
+        try:
+            btns = driver.find_elements(By.XPATH, sel)
+            for b in btns:
+                if b.is_displayed():
+                    driver.execute_script("arguments[0].click();", b)
+                    cerrado = True
+                    time.sleep(0.3)
+                    break
+        except Exception:
+            pass
+
+    try:
+        iframes = driver.find_elements(By.XPATH, '//iframe[contains(@id, "aswift") or contains(@name, "aswift") or contains(@id, "google_ads")]')
+        for iframe in iframes:
+            try:
+                driver.switch_to.frame(iframe)
+                sub_iframes = driver.find_elements(By.XPATH, '//iframe[@id="ad_iframe" or @name="ad_iframe"]')
+                if sub_iframes:
+                    driver.switch_to.frame(sub_iframes[0])
+                for sel in selectores_dismiss:
+                    btns = driver.find_elements(By.XPATH, sel)
+                    if btns and btns[0].is_displayed():
+                        driver.execute_script("arguments[0].click();", btns[0])
+                        cerrado = True
+                        time.sleep(0.3)
+                        break
+                driver.switch_to.default_content()
+                if cerrado:
+                    break
+            except Exception:
+                driver.switch_to.default_content()
+    except Exception:
+        try:
+            driver.switch_to.default_content()
+        except Exception:
+            pass
+
+    try:
+        driver.execute_script("""
+            let vignettes = document.querySelectorAll('ins.adsbygoogle[data-vignette-loaded="true"], div[id^="aswift_"][style*="position: fixed"], iframe[id^="aswift_"][style*="position: fixed"]');
+            vignettes.forEach(v => v.remove());
+            if (window.location.hash.includes('google_vignette')) {
+                history.replaceState(null, null, ' ');
+            }
+        """)
+    except Exception:
+        pass
+
+    return cerrado
+
+def validar_estado_pagina_web() -> dict:
+    """
+    Abre iunlocker.com en modo headless y valida si ya es hábil para consultas.
+    """
+    estado = leer_estado()
     driver = None
     try:
+        chrome_options = _crear_chrome_options(headless=True)
         driver = webdriver.Chrome(options=chrome_options)
         driver.get("https://iunlocker.com/es/check_imei.php")
+        cerrar_anuncio_si_aparece(driver)
 
         timeout = 15
         end_time = time.time() + timeout
@@ -149,22 +213,21 @@ def validar_estado_pagina_web() -> dict:
         html_completo = ""
 
         while time.time() < end_time:
+            cerrar_anuncio_si_aparece(driver)
             html_completo = driver.page_source
             html_lower = html_completo.lower()
 
-            if "reached the limit" in html_lower or "límite" in html_lower:
+            if "reached the limit" in html_lower or "alcanzado el límite" in html_lower or "límite" in html_lower:
                 limite_detectado = True
                 break
 
-            elementos = driver.find_elements(By.XPATH, '//*[@id="imei"]')
+            elementos = driver.find_elements(By.XPATH, '//*[@id="imeiForm"]/div[2]')
             if elementos and elementos[0].is_displayed():
-                # Formulario disponible y listo
                 break
             time.sleep(0.4)
 
         ahora = datetime.now()
         if limite_detectado:
-            # Sigue bloqueado: no reinicia conteo, actualiza tiempo si el sitio lo provee
             match = re.search(r'(\d+)\s*hour(?:s)?\s*(\d+)\s*minute(?:s)?', html_completo, re.IGNORECASE)
             if match:
                 h_bloq = int(match.group(1))
@@ -187,7 +250,6 @@ def validar_estado_pagina_web() -> dict:
                 "consultas_restantes": 0
             }
         else:
-            # Sitio disponible: reinicia conteo y limpia bloqueo
             estado["consultas_restantes"] = LIMITE_CONSULTAS
             estado["bloqueado_hasta"] = None
             estado["ultimo_reset"] = ahora.isoformat()
@@ -202,7 +264,6 @@ def validar_estado_pagina_web() -> dict:
             }
 
     except Exception as e:
-        # En caso de error de conexión al validar, volver a donde estaba
         t = calcular_tiempo_restante(estado)
         return {
             "habil": False,
@@ -218,25 +279,33 @@ def validar_estado_pagina_web() -> dict:
             except Exception: pass
 
 def extraer_modelo_iphone(texto_crudo: str) -> str:
-    match = re.search(r'(?i)(iphone\s+.*?)(?=\s+\d+\s*(?:GB|TB)|\s*$)', texto_crudo)
-    if match:
-        return match.group(1).strip().title()
+    if not texto_crudo:
+        return ""
+    m = re.search(r'(?i)(?:model(?: description)?|dispositivo|device)?\s*:?\s*(iphone\s+[^\n\r]+)', texto_crudo)
+    if m:
+        candidato = m.group(1).strip()
+        m_gb = re.search(r'(?i)(iphone\s+.*?)(?=\s+\d+\s*(?:GB|TB)|\s*$)', candidato)
+        if m_gb:
+            return m_gb.group(1).strip().title()
+        return candidato.title()
+    lineas = [l.strip() for l in texto_crudo.splitlines() if l.strip()]
+    if lineas:
+        return lineas[0]
     return texto_crudo
 
 def _output(data: dict):
     """Imprime el resultado JSON a stdout y termina."""
-    print(json.dumps(data, ensure_ascii=False))
+    print(json.dumps(data, ensure_ascii=False), flush=True)
 
 def consultar_modelo_pro(imei: str, con_pantallazo: bool = False, headless: bool = True):
     """
-    Consulta el modelo del IMEI en iunlocker.com.
-    Gestiona el conteo propio de 5 consultas/24h y valida disponibilidad web.
-    Emite JSON a stdout.
+    Consulta el modelo del IMEI en iunlocker.com/es/check_imei.php.
+    Scrollea a //*[@id="imeiForm"]/div[2], ingresa el IMEI, presiona //*[@id="timer1"]/a,
+    cierra anuncios si aparecen, scrollea y captura pantallazo de //*[@id="scr_save"].
     """
     estado = leer_estado()
     estado = verificar_y_resetear_si_necesario(estado)
 
-    # ── Si el estado local marca bloqueo o 0 cupos, validar la página en vivo al presionar ──
     esta_bloqueado = False
     if estado.get("bloqueado_hasta"):
         try:
@@ -247,35 +316,13 @@ def consultar_modelo_pro(imei: str, con_pantallazo: bool = False, headless: bool
             pass
 
     if esta_bloqueado or estado["consultas_restantes"] <= 0:
-        # Validar en vivo si la página ya es hábil
         val_res = validar_estado_pagina_web()
         if not val_res.get("habil"):
             _output(val_res)
             return
-        # Si fue hábil, recargar estado con cupos restaurados
         estado = leer_estado()
 
-    # ── Lanzar Selenium ──
-    chrome_options = Options()
-    if headless:
-        chrome_options.add_argument("--headless=new")
-    else:
-        chrome_options.add_argument("--start-maximized")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--log-level=3")
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    )
-    prefs = {
-        "profile.managed_default_content_settings.images": 2,
-        "profile.managed_default_content_settings.stylesheet": 2
-    }
-    chrome_options.add_experimental_option("prefs", prefs)
-
+    chrome_options = _crear_chrome_options(headless=headless)
     driver = webdriver.Chrome(options=chrome_options)
     if not headless:
         try:
@@ -291,57 +338,158 @@ def consultar_modelo_pro(imei: str, con_pantallazo: bool = False, headless: bool
 
     try:
         driver.get("https://iunlocker.com/es/check_imei.php")
+        time.sleep(1)
+        cerrar_anuncio_si_aparece(driver)
 
-        timeout = 20
+        if str(imei).strip().upper() in ("ALTERADA", "TEST_ALTERADA", "TEST"):
+            _output({
+                "status": "pagina_alterada",
+                "pagina": "iUnlocker (Modelo Pro)",
+                "mensaje": "El estado de la página iUnlocker ha cambiado, por favor solicite soporte a Martin.",
+                "detalle": "Simulación de prueba: no se encontró el campo IMEI (//*[@id='imeiForm']/div[2]) en iunlocker.com.",
+                "consultas_restantes": estado.get("consultas_restantes", LIMITE_CONSULTAS)
+            })
+            return
+
+        timeout = 80
         end_time = time.time() + timeout
-        imei_field = None
+        input_container = None
 
+        # 1. Scrollear hasta encontrar //*[@id="imeiForm"]/div[2]
         while time.time() < end_time:
-            elementos = driver.find_elements(By.XPATH, '//*[@id="imei"]')
-            if elementos:
-                imei_field = elementos[0]
+            cerrar_anuncio_si_aparece(driver)
+            cont = driver.find_elements(By.XPATH, '//*[@id="imeiForm"]/div[2]')
+            if cont and cont[0].is_displayed():
+                input_container = cont[0]
                 break
             time.sleep(0.3)
 
-        if not imei_field:
+        if not input_container:
             _output({
-                "status": "error",
-                "mensaje": "No se pudo cargar el campo IMEI en el sitio",
+                "status": "pagina_alterada",
+                "pagina": "iUnlocker (Modelo Pro)",
+                "mensaje": "El estado de la página iUnlocker ha cambiado, por favor solicite soporte a Martin.",
+                "detalle": "No se encontró el campo IMEI (//*[@id='imeiForm']/div[2]) en iunlocker.com.",
                 "consultas_restantes": estado["consultas_restantes"]
             })
             return
 
-        imei_field.send_keys(imei)
-        driver.find_element(By.XPATH, '//*[@id="timer1"]/a').click()
+        driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", input_container)
+        time.sleep(0.4)
 
+        imei_field = None
+        inputs = input_container.find_elements(By.TAG_NAME, "input")
+        if inputs:
+            imei_field = inputs[0]
+        else:
+            by_id = driver.find_elements(By.ID, "imei")
+            if by_id:
+                imei_field = by_id[0]
+
+        if not imei_field:
+            _output({
+                "status": "pagina_alterada",
+                "pagina": "iUnlocker (Modelo Pro)",
+                "mensaje": "El estado de la página iUnlocker ha cambiado, por favor solicite soporte a Martin.",
+                "detalle": "No se encontró el input dentro de //*[@id='imeiForm']/div[2] en iunlocker.com.",
+                "consultas_restantes": estado["consultas_restantes"]
+            })
+            return
+
+        imei_field.clear()
+        imei_field.send_keys(str(imei).strip())
+        time.sleep(0.4)
+
+        # 2. Scrollear y presionar //*[@id="timer1"]/a
+        btn_elements = driver.find_elements(By.XPATH, '//*[@id="timer1"]/a')
+        if not btn_elements:
+            _output({
+                "status": "pagina_alterada",
+                "pagina": "iUnlocker (Modelo Pro)",
+                "mensaje": "El estado de la página iUnlocker ha cambiado, por favor solicite soporte a Martin.",
+                "detalle": "No se encontró el botón de consulta (//*[@id='timer1']/a) en iunlocker.com.",
+                "consultas_restantes": estado["consultas_restantes"]
+            })
+            return
+
+        btn = btn_elements[0]
+        driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", btn)
+        time.sleep(0.4)
+        try:
+            btn.click()
+        except Exception:
+            driver.execute_script("arguments[0].click();", btn)
+
+        time.sleep(1)
+        cerrar_anuncio_si_aparece(driver)
+
+        # Si se abre una nueva ventana, cambiar a ella
+        if len(driver.window_handles) > 1:
+            driver.switch_to.window(driver.window_handles[-1])
+
+        # 3. Esperar que cargue la ventana y scrollear hasta encontrar //*[@id="scr_save"]
         resultado_estado = None
         html_completo = ""
         resultado_div_element = None
 
         while time.time() < end_time:
-            html_completo = driver.page_source
-            html_lower = html_completo.lower()
+            cerrar_anuncio_si_aparece(driver)
+            if len(driver.window_handles) > 1 and driver.current_window_handle != driver.window_handles[-1]:
+                driver.switch_to.window(driver.window_handles[-1])
 
-            if "reached the limit" in html_lower or "límite" in html_lower:
-                resultado_estado = "LIMITE_WEB"
-                break
+            try:
+                html_completo = driver.page_source
+                html_lower = html_completo.lower()
 
-            resultado_div = driver.find_elements(By.XPATH, '//*[@id="scr_save"]')
-            if resultado_div:
-                resultado_estado = "EXITO"
-                resultado_div_element = resultado_div[0]
-                break
+                if (
+                    "reached the limit" in html_lower or
+                    "alcanzado el límite" in html_lower or
+                    "límite" in html_lower or
+                    "too many requests" in html_lower
+                ):
+                    resultado_estado = "LIMITE_WEB"
+                    break
 
-            time.sleep(0.5)
+                resultado_div = driver.find_elements(By.XPATH, '//*[@id="scr_save"]')
+                if resultado_div and resultado_div[0].is_displayed():
+                    resultado_estado = "EXITO"
+                    resultado_div_element = resultado_div[0]
+                    break
+            except Exception:
+                pass
+
+            time.sleep(1)
 
         if resultado_estado == "EXITO":
-            # ── Descuenta una consulta del conteo propio ──
             estado["consultas_restantes"] = max(0, estado["consultas_restantes"] - 1)
 
-            texto_crudo = driver.find_element(
-                By.XPATH, '//*[@id="scr_save"]/div/div[1]'
-            ).text
+            # Scrollear hasta el resultado
+            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", resultado_div_element)
+            time.sleep(0.5)
+
+            texto_crudo = ""
+            try:
+                filas = resultado_div_element.find_elements(By.CLASS_NAME, "iuResCard_row")
+                for f in filas:
+                    t = f.text
+                    if any(k in t.lower() for k in ["model", "modelo", "device", "dispositivo"]):
+                        val = f.find_elements(By.CLASS_NAME, "iuResCard_value")
+                        if val:
+                            texto_crudo = val[0].text.strip()
+                            break
+                if not texto_crudo:
+                    sub_divs = resultado_div_element.find_elements(By.XPATH, './/div/div[1] | .//div[contains(@class, "title")]')
+                    if sub_divs:
+                        texto_crudo = sub_divs[0].text.strip()
+                if not texto_crudo:
+                    texto_crudo = resultado_div_element.text.strip()
+            except Exception:
+                texto_crudo = resultado_div_element.text.strip() if resultado_div_element else ""
+
             modelo_limpio = extraer_modelo_iphone(texto_crudo)
+            if not modelo_limpio or len(modelo_limpio) < 3:
+                todo_texto = resultado_div_element.text if resultado_div_element else ""
+                modelo_limpio = extraer_modelo_iphone(todo_texto)
 
             screenshot_path = None
             if con_pantallazo and resultado_div_element:
@@ -349,7 +497,13 @@ def consultar_modelo_pro(imei: str, con_pantallazo: bool = False, headless: bool
                 temp_dir = os.path.join(base_dir, 'temp_screenshots')
                 os.makedirs(temp_dir, exist_ok=True)
                 screenshot_path = os.path.join(temp_dir, f"modelo_{imei}.png")
-                resultado_div_element.screenshot(screenshot_path)
+                try:
+                    resultado_div_element.screenshot(screenshot_path)
+                except Exception:
+                    try:
+                        driver.save_screenshot(screenshot_path)
+                    except Exception:
+                        screenshot_path = None
 
             guardar_estado(estado)
             _output({
@@ -361,7 +515,6 @@ def consultar_modelo_pro(imei: str, con_pantallazo: bool = False, headless: bool
             })
 
         elif resultado_estado == "LIMITE_WEB":
-            # Detectó límite del sitio — guardar bloqueo web
             match = re.search(
                 r'(\d+)\s*hour(?:s)?\s*(\d+)\s*minute(?:s)?',
                 html_completo, re.IGNORECASE
@@ -404,7 +557,10 @@ def consultar_modelo_pro(imei: str, con_pantallazo: bool = False, headless: bool
             "consultas_restantes": estado.get("consultas_restantes", LIMITE_CONSULTAS)
         })
     finally:
-        driver.quit()
+        try:
+            driver.quit()
+        except Exception:
+            pass
 
 
 def obtener_estado_cupos() -> dict:

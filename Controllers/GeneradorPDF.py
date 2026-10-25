@@ -226,16 +226,22 @@ def generar_pdf(datos):
         
         operador = datos.get('operador', '').lower()
         if operador:
-            if hasattr(sys, '_MEIPASS'):
-                logo_path = os.path.join(sys._MEIPASS, "Views", "icons", f"{operador}.png")
-                # Fallback macOS bundle
-                if not os.path.exists(logo_path):
-                    logo_path = os.path.abspath(os.path.join(sys._MEIPASS, "..", "Resources", "Views", "icons", f"{operador}.png"))
-            else:
-                base_dir = os.path.dirname(os.path.abspath(__file__))
-                logo_path = os.path.normpath(os.path.join(base_dir, "..", "Views", "icons", f"{operador}.png"))
+            def find_logo(op_str):
+                for candidate in [f"{op_str}.png", f"{op_str.capitalize()}.png", f"{op_str.upper()}.png"]:
+                    if hasattr(sys, '_MEIPASS'):
+                        p = os.path.join(sys._MEIPASS, "Views", "icons", candidate)
+                        if os.path.exists(p): return p
+                        p = os.path.abspath(os.path.join(sys._MEIPASS, "..", "Resources", "Views", "icons", candidate))
+                        if os.path.exists(p): return p
+                    else:
+                        base = os.path.dirname(os.path.abspath(__file__))
+                        p = os.path.normpath(os.path.join(base, "..", "Views", "icons", candidate))
+                        if os.path.exists(p): return p
+                return None
 
-            if os.path.exists(logo_path):
+            logo_path = find_logo(operador)
+
+            if logo_path and os.path.exists(logo_path):
                 try:
                     from PIL import Image
                     import tempfile
@@ -261,6 +267,8 @@ def generar_pdf(datos):
                 pdf.image(logo_path, x=235, y=10, w=50)
         
         modo = datos.get('modo', 'detallada')
+        tipo_decl = datos.get('tipo_declaracion', '')
+        estado_red = datos.get('estado_red', '') or datos.get('estado', '')
         fecha_actual = datetime.now().strftime("%d/%m/%Y")
         
         nombre = datos.get('nombre', '').upper()
@@ -271,7 +279,45 @@ def generar_pdf(datos):
         imei = datos.get('imei', '')
         linea_usuario = datos.get('linea_usuario', '')
 
-        if modo == 'estandar':
+        nombre_archivo = f"Declaracion_IMEI_{imei}.pdf"
+
+        if tipo_decl == 'no_oficial' or (estado_red and tipo_decl != 'oficial'):
+            est_key = str(estado_red).lower().strip()
+            mod_str = modelo.strip() if modelo else ""
+
+            if 'desbloqueo en proceso' in est_key:
+                texto_declaracion = (
+                    f"Te queremos contar que hemos recibido tu solicitud para el proceso de desbloqueo "
+                    f"del terminal móvil {mod_str} identificado con el IMEI {imei} y pronto podras volver a navegar con nosotros."
+                )
+                titulo_estado = "SOLICITUD DE DESBLOQUEO EN PROCESO"
+            elif 'bloqueo en proceso' in est_key:
+                texto_declaracion = (
+                    f"Hemos recibido tu solicitud de bloqueo del terminal móvil {mod_str} "
+                    f"identificado con el IMEI {imei} y en unas horas podras verificar su estado en www.imeicolombia.com."
+                )
+                titulo_estado = "SOLICITUD DE BLOQUEO EN PROCESO"
+            elif 'desbloqueado' in est_key:
+                texto_declaracion = f"El terminal movil {mod_str} con IMEI {imei} ha sido desbloqueado exitosamente."
+                titulo_estado = "TERMINAL DESBLOQUEADO EXITOSAMENTE"
+            else:
+                texto_declaracion = f"El terminal movil {mod_str} con IMEI {imei} ha sido bloqueado exitosamente."
+                titulo_estado = "TERMINAL BLOQUEADO EXITOSAMENTE"
+
+            pdf.set_font(_font_name, 'B', 20)
+            pdf.ln(5)
+            pdf.cell(0, 10, f"CONSTANCIA DE RED · {operador.upper()}", ln=True, align='L')
+            pdf.set_font(_font_name, 'B', 12)
+            pdf.cell(0, 8, titulo_estado, ln=True, align='L')
+            
+            pdf.set_y(65)
+            pdf.set_font(_font_name, '', 13)
+            pdf.multi_cell(0, 8, texto_declaracion, align='L')
+            pdf.ln(12)
+            pdf.set_font(_font_name, 'I', 10)
+            pdf.cell(0, 8, f"Fecha de emisión: {fecha_actual}   |   Operador: {operador.upper()}   |   IMEI: {imei}", ln=True, align='L')
+            nombre_archivo = f"Declaracion_NoOficial_{operador}_{estado_red.replace(' ', '_')}_{imei}.pdf"
+        elif modo == 'estandar':
             pdf.set_font(_font_name, 'B', 22)
             pdf.ln(5)
             pdf.cell(0, 10, "CONSTANCIA DE REGISTRO DE IMEI", ln=True, align='L')
@@ -343,7 +389,6 @@ def generar_pdf(datos):
             directorio_destino = salida_dir
         else:
             directorio_destino = os.path.join(os.path.expanduser('~'), 'Downloads')
-        nombre_archivo = f"Declaracion_IMEI_{imei}.pdf"
         ruta_completa = os.path.join(directorio_destino, nombre_archivo)
         
         pdf.output(ruta_completa)

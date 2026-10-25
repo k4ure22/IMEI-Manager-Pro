@@ -60,8 +60,27 @@ if %errorlevel% equ 0 (
     set "ISCC_PATH=%LocalAppData%\Programs\Inno Setup 6\iscc.exe"
 )
 
+:: Si no se encontró Inno Setup, intentar instalarlo automáticamente con winget
+if not defined ISCC_PATH (
+    where winget >nul 2>&1
+    if %errorlevel% equ 0 (
+        echo ⏳ Inno Setup no detectado. Instalando automáticamente mediante winget...
+        winget install --id JRSoftware.InnoSetup -e --silent --accept-source-agreements --accept-package-agreements >nul 2>&1
+        if exist "%ProgramFiles(x86)%\Inno Setup 6\iscc.exe" (
+            set "ISCC_PATH=%ProgramFiles(x86)%\Inno Setup 6\iscc.exe"
+        ) else if exist "%ProgramFiles%\Inno Setup 6\iscc.exe" (
+            set "ISCC_PATH=%ProgramFiles%\Inno Setup 6\iscc.exe"
+        )
+    )
+)
+
+:: Crear carpetas de datos en la distribución portable
+if not exist "dist\IMEI Manager Pro\temp_screenshots" mkdir "dist\IMEI Manager Pro\temp_screenshots"
+if not exist "dist\IMEI Manager Pro\FilesIMP" mkdir "dist\IMEI Manager Pro\FilesIMP"
+if not exist "dist\IMEI Manager Pro\Resultados_Masivos" mkdir "dist\IMEI Manager Pro\Resultados_Masivos"
+
 echo 🗜️ Generando paquete portable ZIP comprimido para compartir...
-powershell -Command "if (Test-Path 'dist\IMEI_Manager_Pro_v2.0_Windows_Portable.zip') { Remove-Item 'dist\IMEI_Manager_Pro_v2.0_Windows_Portable.zip' }; Compress-Archive -Path 'dist\IMEI Manager Pro\*' -DestinationPath 'dist\IMEI_Manager_Pro_v2.0_Windows_Portable.zip' -Force"
+powershell -Command "if (Test-Path 'dist\IMEI_Manager_Pro_v2.0_Windows_Portable.zip') { Remove-Item 'dist\IMEI_Manager_Pro_v2.0_Windows_Portable.zip' }; Compress-Archive -Path 'dist\IMEI Manager Pro\*', 'instalar_dependencias_windows.bat', 'LEEME-WINDOWS.txt' -DestinationPath 'dist\IMEI_Manager_Pro_v2.0_Windows_Portable.zip' -Force"
 
 if defined ISCC_PATH (
     echo 🔨 Compilando Instalador Setup con Inno Setup...
@@ -86,7 +105,7 @@ if defined ISCC_PATH (
     )
 ) else (
     echo.
-    echo ℹ️ Inno Setup no está instalado en este equipo.
+    echo ℹ️ Inno Setup no está disponible en este equipo.
     echo    El paquete portable comprimido ya está listo para compartir en:
     echo    👉 dist\IMEI_Manager_Pro_v2.0_Windows_Portable.zip
     echo.

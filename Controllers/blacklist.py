@@ -1,8 +1,7 @@
 """
-blacklist.py — Consulta GSMA Blacklist en iunlocker.com/es/gsma_blacklist_check.php
-Uso CLI: python blacklist.py <imei> [--screenshot]
+blacklist.py — Consulta GSMA Blacklist en iunlocker.com/es/check_imei.php
+Uso CLI: python blacklist.py <imei> [--screenshot] [--visible] [--estado] [--validar-web]
 Salida:  JSON en stdout. Logs a stderr.
-Patrón idéntico a ConsultarModeloPro.py (polling de page_source).
 """
 
 from __future__ import annotations
@@ -27,8 +26,6 @@ from datetime import datetime, timedelta
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 
 # ─── ESTADO LOCAL (límite diario) ────────────────────────────────────────────
 ARCHIVO_ESTADO = os.path.join(
@@ -63,16 +60,16 @@ def leer_estado() -> dict:
                 if "ultimo_reset" not in estado:
                     estado["ultimo_reset"] = datetime.now().isoformat()
                 return estado
-        except Exception:
+        except (json.JSONDecodeError, KeyError):
             pass
     return {
         "consultas_restantes": LIMITE_CONSULTAS,
         "bloqueado_hasta": None,
-        "ultimo_reset": datetime.now().isoformat()
+        "ultimo_reset": datetime.now().isoformat(),
     }
 
 
-def guardar_estado(estado: dict):
+def guardar_estado(estado: dict) -> None:
     _asegurar_dir()
     with open(ARCHIVO_ESTADO, "w", encoding="utf-8") as f:
         json.dump(estado, f, indent=2)
@@ -133,23 +130,115 @@ def calcular_tiempo_restante(estado: dict) -> dict:
     return {"horas": 0, "minutos": 0}
 
 
+# ─── DRIVER Y UTILIDADES ─────────────────────────────────────────────────────
+
+def _crear_chrome_options(headless: bool = True) -> Options:
+    chrome_options = Options()
+    if headless:
+        chrome_options.add_argument("--headless=new")
+    else:
+        chrome_options.add_argument("--start-maximized")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--log-level=3")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option("useAutomationExtension", False)
+    chrome_options.add_argument(
+        "user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    )
+    prefs = {
+        "profile.default_content_setting_values.notifications": 2,
+    }
+    chrome_options.add_experimental_option("prefs", prefs)
+    return chrome_options
+
+
+def cerrar_anuncio_si_aparece(driver) -> bool:
+    """
+    Detecta y cierra anuncios intersticiales (Google Vignette, popups, overlays de publicidad).
+    """
+    cerrado = False
+    selectores_dismiss = [
+        '//*[@id="dismiss-button"]',
+        '//div[@id="dismiss-button"]',
+        '//button[@id="dismiss-button"]',
+        '//*[@aria-label="Close ad"]',
+        '//*[@aria-label="Cerrar anuncio"]',
+        '//*[@aria-label="Close"]',
+        '//*[@aria-label="Cerrar"]',
+        '//div[contains(@class, "close-button")]',
+        '//div[contains(@class, "btn-close")]',
+        '//span[contains(@class, "close-icon")]',
+        '//div[contains(@id, "close")]'
+    ]
+    for sel in selectores_dismiss:
+        try:
+            btns = driver.find_elements(By.XPATH, sel)
+            for b in btns:
+                if b.is_displayed():
+                    driver.execute_script("arguments[0].click();", b)
+                    cerrado = True
+                    time.sleep(0.3)
+                    break
+        except Exception:
+            pass
+
+    try:
+        iframes = driver.find_elements(By.XPATH, '//iframe[contains(@id, "aswift") or contains(@name, "aswift") or contains(@id, "google_ads")]')
+        for iframe in iframes:
+            try:
+                driver.switch_to.frame(iframe)
+                sub_iframes = driver.find_elements(By.XPATH, '//iframe[@id="ad_iframe" or @name="ad_iframe"]')
+                if sub_iframes:
+                    driver.switch_to.frame(sub_iframes[0])
+                for sel in selectores_dismiss:
+                    btns = driver.find_elements(By.XPATH, sel)
+                    if btns and btns[0].is_displayed():
+                        driver.execute_script("arguments[0].click();", btns[0])
+                        cerrado = True
+                        time.sleep(0.3)
+                        break
+                driver.switch_to.default_content()
+                if cerrado:
+                    break
+            except Exception:
+                driver.switch_to.default_content()
+    except Exception:
+        try:
+            driver.switch_to.default_content()
+        except Exception:
+            pass
+
+    try:
+        driver.execute_script("""
+            let vignettes = document.querySelectorAll('ins.adsbygoogle[data-vignette-loaded="true"], div[id^="aswift_"][style*="position: fixed"], iframe[id^="aswift_"][style*="position: fixed"]');
+            vignettes.forEach(v => v.remove());
+            if (window.location.hash.includes('google_vignette')) {
+                history.replaceState(null, null, ' ');
+            }
+        """)
+    except Exception:
+        pass
+
+    return cerrado
+
+
 def validar_estado_pagina_web() -> dict:
     """
-    Abre iunlocker.com/es/gsma_blacklist_check.php en modo headless y valida si ya es hábil para consultas.
-    Si la página sigue reportando límite alcanzado:
-      - NO reinicia el conteo (mantiene 0 cupos).
-      - Extrae el tiempo restante o mantiene el bloqueo previo.
-      - Retorna {"habil": False, "status": "limite_web", ...}
-    Si la página está lista y sin mensaje de bloqueo:
-      - Reinicia el conteo a 5 cupos y limpia bloqueado_hasta.
-      - Retorna {"habil": True, "status": "success", ...}
+    Abre iunlocker.com en modo headless y valida si ya es hábil para consultas.
     """
     estado = leer_estado()
     driver = None
     try:
-        driver = _init_driver()
+        chrome_options = _crear_chrome_options(headless=True)
+        driver = webdriver.Chrome(options=chrome_options)
         _log("Validando disponibilidad en página de Blacklist...")
-        driver.get("https://iunlocker.com/es/gsma_blacklist_check.php")
+        driver.get("https://iunlocker.com/es/check_imei.php")
+        cerrar_anuncio_si_aparece(driver)
 
         timeout = 15
         end_time = time.time() + timeout
@@ -157,16 +246,16 @@ def validar_estado_pagina_web() -> dict:
         html_completo = ""
 
         while time.time() < end_time:
+            cerrar_anuncio_si_aparece(driver)
             html_completo = driver.page_source
             html_lower = html_completo.lower()
 
-            if "reached the limit" in html_lower or "límite" in html_lower:
+            if "reached the limit" in html_lower or "alcanzado el límite" in html_lower or "límite" in html_lower:
                 limite_detectado = True
                 break
 
-            input_xpath = "/html/body/div[2]/section[1]/div/div/form/div[2]/input[1]"
-            els = driver.find_elements(By.XPATH, input_xpath)
-            if els and els[0].is_displayed():
+            elementos = driver.find_elements(By.XPATH, '//*[@id="imeiForm"]/div[2]')
+            if elementos and elementos[0].is_displayed():
                 break
             time.sleep(0.4)
 
@@ -244,44 +333,6 @@ def obtener_estado_cupos() -> dict:
     }
 
 
-# ─── DRIVER ──────────────────────────────────────────────────────────────────
-
-def _init_driver(headless: bool = True) -> webdriver.Chrome:
-    """Mismo patrón que ConsultarModeloPro.py."""
-    chrome_options = Options()
-    if headless:
-        chrome_options.add_argument("--headless=new")
-    else:
-        chrome_options.add_argument("--start-maximized")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--log-level=3")
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    )
-    prefs = {
-        "profile.managed_default_content_settings.images": 2,
-        "profile.managed_default_content_settings.stylesheet": 2,
-    }
-    chrome_options.add_experimental_option("prefs", prefs)
-    driver = webdriver.Chrome(options=chrome_options)
-    if not headless:
-        try:
-            driver.maximize_window()
-        except Exception:
-            pass
-        if sys.platform == "darwin":
-            try:
-                import subprocess
-                subprocess.run(["osascript", "-e", 'tell application "Google Chrome" to activate'], check=False)
-            except Exception:
-                pass
-    return driver
-
-
 # ─── CONSULTA PRINCIPAL ───────────────────────────────────────────────────────
 
 def consultar_blacklist(imei: str, con_pantallazo: bool = False, headless: bool = True) -> None:
@@ -291,7 +342,6 @@ def consultar_blacklist(imei: str, con_pantallazo: bool = False, headless: bool 
     estado = leer_estado()
     estado = verificar_y_resetear_si_necesario(estado)
 
-    # ── Si el estado local marca bloqueo o 0 cupos, validar la página en vivo al presionar ──
     esta_bloqueado = False
     if estado.get("bloqueado_hasta"):
         try:
@@ -308,56 +358,129 @@ def consultar_blacklist(imei: str, con_pantallazo: bool = False, headless: bool 
             return
         estado = leer_estado()
 
-    driver = _init_driver(headless=headless)
+    chrome_options = _crear_chrome_options(headless=headless)
+    driver = webdriver.Chrome(options=chrome_options)
+    if not headless:
+        try:
+            driver.maximize_window()
+        except Exception:
+            pass
+        if sys.platform == "darwin":
+            try:
+                import subprocess
+                subprocess.run(["osascript", "-e", 'tell application "Google Chrome" to activate'], check=False)
+            except Exception:
+                pass
+
     try:
-        timeout = 25
+        timeout = 80
         end_time = time.time() + timeout
 
-        _log("Cargando página...")
-        driver.get("https://iunlocker.com/es/gsma_blacklist_check.php")
-        time.sleep(random.uniform(0.8, 1.4))
+        if str(imei).strip().upper() in ("ALTERADA", "TEST_ALTERADA", "TEST"):
+            _output({
+                "status": "pagina_alterada",
+                "pagina": "iUnlocker (Blacklist GSMA)",
+                "mensaje": "El estado de la página iUnlocker Blacklist ha cambiado, por favor solicite soporte a Martin.",
+                "detalle": "Simulación de prueba: no se encontró el campo IMEI en iunlocker.com.",
+                "screenshot_path": None,
+                "consultas_restantes": estado.get("consultas_restantes", LIMITE_CONSULTAS)
+            })
+            return
 
-        # ── 1. Campo IMEI ──────────────────────────────────────────
-        input_xpath = "/html/body/div[2]/section[1]/div/div/form/div[2]/input[1]"
-        imei_field = None
+        _log("Cargando página https://iunlocker.com/es/check_imei.php...")
+        driver.get("https://iunlocker.com/es/check_imei.php")
+        time.sleep(1)
+        cerrar_anuncio_si_aparece(driver)
+
+        # ── 1. Scrollear hasta encontrar //*[@id="imeiForm"]/div[2] ─
+        input_container = None
         while time.time() < end_time:
-            els = driver.find_elements(By.XPATH, input_xpath)
-            if els:
-                imei_field = els[0]
+            cerrar_anuncio_si_aparece(driver)
+            cont = driver.find_elements(By.XPATH, '//*[@id="imeiForm"]/div[2]')
+            if cont and cont[0].is_displayed():
+                input_container = cont[0]
                 break
             time.sleep(0.3)
+
+        if not input_container:
+            _output({
+                "status": "pagina_alterada",
+                "pagina": "iUnlocker (Blacklist GSMA)",
+                "mensaje": "El estado de la página iUnlocker Blacklist ha cambiado, por favor solicite soporte a Martin.",
+                "detalle": "No se encontró el contenedor del campo IMEI (//*[@id='imeiForm']/div[2]) en iunlocker.com.",
+                "screenshot_path": None,
+                "consultas_restantes": estado.get("consultas_restantes", LIMITE_CONSULTAS)
+            })
+            return
+
+        driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", input_container)
+        time.sleep(0.4)
+
+        # Encontrar campo input
+        imei_field = None
+        inputs = input_container.find_elements(By.TAG_NAME, "input")
+        if inputs:
+            imei_field = inputs[0]
+        else:
+            by_id = driver.find_elements(By.ID, "imei")
+            if by_id:
+                imei_field = by_id[0]
 
         if not imei_field:
-            _output({"status": "error", "mensaje": "No se encontró el campo IMEI.", "screenshot_path": None})
+            _output({
+                "status": "pagina_alterada",
+                "pagina": "iUnlocker (Blacklist GSMA)",
+                "mensaje": "El estado de la página iUnlocker Blacklist ha cambiado, por favor solicite soporte a Martin.",
+                "detalle": "No se encontró el campo input de IMEI dentro de //*[@id='imeiForm']/div[2] en iunlocker.com.",
+                "screenshot_path": None,
+                "consultas_restantes": estado.get("consultas_restantes", LIMITE_CONSULTAS)
+            })
             return
 
-        imei_field.send_keys(imei)   # Escritura rápida
+        imei_field.clear()
+        imei_field.send_keys(str(imei).strip())
         _log(f"IMEI escrito: {imei}")
-        time.sleep(random.uniform(0.3, 0.6))
+        time.sleep(0.4)
 
-        # ── 2. Botón ───────────────────────────────────────────────
-        button_xpath = '//*[@id="timer1"]/button'
-        btn = None
-        while time.time() < end_time:
-            els = driver.find_elements(By.XPATH, button_xpath)
-            if els:
-                btn = els[0]
-                break
-            time.sleep(0.3)
-
-        if not btn:
-            _output({"status": "error", "mensaje": "No se encontró el botón de consulta.", "screenshot_path": None})
+        # ── 2. Scrollear y presionar //*[@id="timer1"]/a ────────────
+        btn_elements = driver.find_elements(By.XPATH, '//*[@id="timer1"]/a')
+        if not btn_elements:
+            _output({
+                "status": "pagina_alterada",
+                "pagina": "iUnlocker (Blacklist GSMA)",
+                "mensaje": "El estado de la página iUnlocker Blacklist ha cambiado, por favor solicite soporte a Martin.",
+                "detalle": "No se encontró el botón de consulta (//*[@id='timer1']/a) en iunlocker.com.",
+                "screenshot_path": None,
+                "consultas_restantes": estado.get("consultas_restantes", LIMITE_CONSULTAS)
+            })
             return
 
-        btn.click()
-        _log("Botón clickeado. Esperando resultado...")
+        btn = btn_elements[0]
+        driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", btn)
+        time.sleep(0.4)
+        try:
+            btn.click()
+        except Exception:
+            driver.execute_script("arguments[0].click();", btn)
 
-        # ── 3. Polling del resultado (igual que ConsultarModeloPro) ─
+        _log("Botón clickeado. Esperando resultado...")
+        time.sleep(1)
+        cerrar_anuncio_si_aparece(driver)
+
+        # Si se abre una nueva ventana/pestaña, cambiar a ella
+        if len(driver.window_handles) > 1:
+            driver.switch_to.window(driver.window_handles[-1])
+
+        # ── 3. Esperar que cargue la ventana y scrollear hasta //*[@id="scr_save"] ─
         resultado_estado = None
         result_element = None
         html_completo = ""
 
         while time.time() < end_time:
+            cerrar_anuncio_si_aparece(driver)
+            if len(driver.window_handles) > 1 and driver.current_window_handle != driver.window_handles[-1]:
+                driver.switch_to.window(driver.window_handles[-1])
+
             try:
                 html_completo = driver.page_source
                 html_lower = html_completo.lower()
@@ -365,17 +488,17 @@ def consultar_blacklist(imei: str, con_pantallazo: bool = False, headless: bool 
                 # Detectar límite del sitio
                 if (
                     "reached the limit" in html_lower or
-                    "you have reached" in html_lower or
+                    "alcanzado el límite" in html_lower or
                     "daily limit" in html_lower or
-                    "too many requests" in html_lower or
-                    "please try again" in html_lower
+                    "límite" in html_lower or
+                    "too many requests" in html_lower
                 ):
                     resultado_estado = "LIMITE_WEB"
                     break
 
                 # Detectar resultado exitoso
                 divs = driver.find_elements(By.XPATH, '//*[@id="scr_save"]')
-                if divs:
+                if divs and divs[0].is_displayed():
                     result_element = divs[0]
                     resultado_estado = "EXITO"
                     break
@@ -383,30 +506,54 @@ def consultar_blacklist(imei: str, con_pantallazo: bool = False, headless: bool 
             except Exception as poll_err:
                 _log(f"Poll error (ignorado): {poll_err}")
 
-            time.sleep(0.5)
+            time.sleep(1)
 
         # ── 4. Procesar resultado ──────────────────────────────────
         if resultado_estado == "EXITO":
-            # Descontar cupo
             estado["consultas_restantes"] = max(0, estado["consultas_restantes"] - 1)
+
+            # Scrollear hasta el resultado
+            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", result_element)
+            time.sleep(0.5)
 
             resultado_texto = ""
             try:
-                status_xpath = '//*[@id="scr_save"]/div[2]/div[2]/div/div[2]/div[2]/font'
-                font_els = driver.find_elements(By.XPATH, status_xpath)
-                if font_els:
-                    resultado_texto = font_els[0].text.strip()
-                else:
+                # 1. Buscar fila de Blacklist o GSMA
+                filas = result_element.find_elements(By.CLASS_NAME, "iuResCard_row")
+                for f in filas:
+                    t = f.text
+                    if "blacklist" in t.lower() or "gsma" in t.lower() or "lista negra" in t.lower():
+                        val = f.find_elements(By.CLASS_NAME, "iuResCard_value")
+                        if val:
+                            resultado_texto = val[0].text.strip()
+                            break
+                # 2. Fallback a etiquetas destacadas
+                if not resultado_texto:
+                    font_els = result_element.find_elements(By.XPATH, './/font | .//b | .//strong')
+                    for fe in font_els:
+                        ft = fe.text.strip()
+                        if any(k in ft.lower() for k in ["clean", "limpio", "blacklist", "reported", "blocked"]):
+                            resultado_texto = ft
+                            break
+                # 3. Fallback a texto completo
+                if not resultado_texto:
                     resultado_texto = result_element.text.strip()
             except Exception:
                 resultado_texto = result_element.text.strip() if result_element else ""
 
-            _log(f"Resultado: '{resultado_texto}'")
+            _log(f"Resultado texto Blacklist: '{resultado_texto}'")
+            res_lower = resultado_texto.lower()
             en_blacklist = (
-                "blacklist" in resultado_texto.lower() or
-                "reported" in resultado_texto.lower() or
-                "blocked" in resultado_texto.lower()
+                ("blacklist" in res_lower and "clean" not in res_lower and "not" not in res_lower) or
+                "reported" in res_lower or
+                "blocked" in res_lower or
+                "bloqueado" in res_lower or
+                "robado" in res_lower or
+                "hurto" in res_lower
             )
+            if "clean" in res_lower or "limpio" in res_lower or "no reportado" in res_lower or "not blacklisted" in res_lower:
+                en_blacklist = False
+
             valor_bd = "Blacklist" if en_blacklist else "clean"
             mensaje = (
                 f"IMEI reportado en Blacklist GSMA: {resultado_texto}"
@@ -422,14 +569,10 @@ def consultar_blacklist(imei: str, con_pantallazo: bool = False, headless: bool 
                 os.makedirs(temp_dir, exist_ok=True)
                 screenshot_path = os.path.join(temp_dir, f"blacklist_{imei}.png")
                 try:
-                    driver.execute_script(
-                        "arguments[0].scrollIntoView({block: 'center'});", result_element
-                    )
-                    time.sleep(0.4)
                     result_element.screenshot(screenshot_path)
                     _log(f"Pantallazo guardado: {screenshot_path}")
                 except Exception as e:
-                    _log(f"Pantallazo de elemento falló ({e}), página completa.")
+                    _log(f"Pantallazo de elemento falló ({e}), intentando página completa.")
                     try:
                         driver.save_screenshot(screenshot_path)
                     except Exception:
@@ -448,7 +591,6 @@ def consultar_blacklist(imei: str, con_pantallazo: bool = False, headless: bool 
             })
 
         elif resultado_estado == "LIMITE_WEB":
-            # Intentar extraer el tiempo de espera del HTML
             match = re.search(
                 r'(\d+)\s*hour(?:s)?\s*(\d+)\s*minute(?:s)?',
                 html_completo, re.IGNORECASE
@@ -456,7 +598,6 @@ def consultar_blacklist(imei: str, con_pantallazo: bool = False, headless: bool 
             horas_bloqueo = int(match.group(1)) if match else HORAS_RESET
             mins_bloqueo = int(match.group(2)) if match else 0
 
-            # Guardar bloqueo
             ahora = datetime.now()
             hasta_dt = ahora + timedelta(hours=horas_bloqueo, minutes=mins_bloqueo)
             estado["bloqueado_hasta"] = hasta_dt.isoformat()

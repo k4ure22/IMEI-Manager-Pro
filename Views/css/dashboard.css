@@ -292,7 +292,7 @@ th {
     background-color: var(--th-bg);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    padding: 16px;
+    padding: 14px 14px;
     font-size: 11.5px;
     font-weight: 750;
     text-transform: uppercase;
@@ -302,6 +302,8 @@ th {
     top: 0;
     z-index: 30;
     border-bottom: 1px solid var(--th-bd);
+    white-space: nowrap;
+    box-sizing: border-box;
 }
 
 [data-theme="dark"] th {
@@ -315,24 +317,33 @@ th {
 }
 
 td {
-    padding: 11px 14px;
+    padding: 0 14px;
     border-bottom: none;
     font-size: 13.5px;
     font-weight: 400;
     color: var(--color);
-    transition: all 0.22s cubic-bezier(0.25, 0.8, 0.25, 1);
+    transition: background 0.15s ease-out;
     vertical-align: middle;
+    white-space: nowrap;
+    box-sizing: border-box;
+    height: 48px !important;
+    max-height: 48px !important;
+    min-height: 48px !important;
 }
 
-/* === FILAS GLASS INDIVIDUALES === */
+/* === FILAS GLASS INDIVIDUALES CON ALTURA ESTRICTAMENTE FIJA === */
 tr {
     position: relative;
-    transition: all 0.22s cubic-bezier(0.25, 0.8, 0.25, 1);
     cursor: pointer;
 }
 
-tbody tr {
+tbody tr,
+#tableBody tr {
     border-radius: 10px;
+    height: 48px !important;
+    max-height: 48px !important;
+    min-height: 48px !important;
+    box-sizing: border-box !important;
 }
 
 /* Separador sutil entre filas */
@@ -372,23 +383,44 @@ tbody tr::after {
     background: linear-gradient(90deg, transparent, rgba(37, 99, 235, 0.10), transparent);
 }
 
-/* HOVER — lift + iluminación */
-tbody tr:hover td {
-    background: rgba(var(--hover-acc-rgb), 0.07) !important;
+/* HOVER — lift + iluminación continua y suave en toda la fila (sin divisiones por celda) */
+tbody tr,
+#tableBody tr {
+    transition: background 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
+                transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
 }
 
-tbody tr:hover {
+tbody tr:hover td,
+#tableBody tr:hover td {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+tbody tr:hover,
+#tableBody tr:hover {
     transform: translateY(-1px);
     z-index: 5;
+    background: linear-gradient(90deg,
+            var(--estado-color, rgba(6, 182, 212, 0.26)) 0%,
+            var(--estado-glow, rgba(6, 182, 212, 0.12)) 22%,
+            rgba(255, 255, 255, 0.035) 55%,
+            transparent 100%) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05),
+                inset 0 -1px 0 rgba(255, 255, 255, 0.02),
+                0 4px 16px rgba(0, 0, 0, 0.3) !important;
 }
 
-[data-theme="dark"] tbody tr:hover td {
-    box-shadow: inset 0 0 20px rgba(var(--hover-acc-rgb), 0.06);
-}
-
-[data-theme="light"] tbody tr:hover td {
-    background: rgba(var(--hover-acc-rgb), 0.055) !important;
-    box-shadow: inset 0 0 16px rgba(var(--hover-acc-rgb), 0.04);
+[data-theme="light"] tbody tr:hover,
+[data-theme="light"] #tableBody tr:hover {
+    background: linear-gradient(90deg,
+            var(--estado-color-light, rgba(37, 99, 235, 0.18)) 0%,
+            rgba(37, 99, 235, 0.08) 25%,
+            rgba(37, 99, 235, 0.03) 60%,
+            transparent 100%) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7),
+                inset 0 -1px 0 rgba(37, 99, 235, 0.05),
+                0 3px 12px rgba(37, 99, 235, 0.08) !important;
 }
 
 .tr-animate {
@@ -762,8 +794,11 @@ tbody tr:hover .neon-indicator {
 }
 
 #pinOverlay,
-#lineSelectorOverlay {
-    z-index: 50000 !important;
+#lineSelectorOverlay,
+#declaracionNoOficialOverlay,
+#etbDesbloqueoOverlay,
+#encargadoSelectorOverlay {
+    z-index: 55000 !important;
 }
 
 /* ==========================================
@@ -1164,19 +1199,17 @@ button.config-item-button:active {
     position: fixed;
     top: 0;
     left: 0;
-    background: var(--dock-bg);
+    background: var(--toast-bg, rgba(15, 23, 42, 0.98));
     border: 1px solid var(--dock-bd);
     border-top-color: var(--dock-bd-top);
-    backdrop-filter: blur(28px) saturate(180%);
-    -webkit-backdrop-filter: blur(28px) saturate(180%);
     color: var(--color);
     height: 50px;
     padding: 0 18px;
-    border-radius: 12px;
-    /* Posición base: oculto detrás del dock (z-index 61000) */
-    transform: translate3d(var(--toast-x-start, 0px), var(--toast-y, 0px), 0);
+    border-radius: 14px;
+    /* Posición base: siempre en endX mientras sea visible */
+    transform: translate3d(var(--toast-x-end, 0px), var(--toast-y, 0px), 0);
     opacity: 0;
-    /* z-index por debajo del dock para emerger de detrás de él */
+    visibility: hidden;
     z-index: 60000;
     display: flex;
     align-items: center;
@@ -1184,24 +1217,89 @@ button.config-item-button:active {
     font-size: 13.5px;
     font-weight: 500;
     pointer-events: none;
-    will-change: transform, opacity;
     max-width: min(440px, calc(100vw - 36px));
     box-sizing: border-box;
+    will-change: transform, opacity;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    -webkit-transform-style: preserve-3d;
+    transform-style: preserve-3d;
 }
 
 [data-theme="dark"] .toast {
-    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.60),
-        inset 0 0 15px rgba(217, 70, 239, 0.05);
+    background: linear-gradient(135deg, rgba(20, 14, 34, 0.98) 0%, rgba(12, 7, 22, 0.99) 100%);
+    border: 1px solid rgba(217, 70, 239, 0.28);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.65),
+                inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 [data-theme="light"] .toast {
-    box-shadow: 0 10px 28px rgba(37, 99, 235, 0.14),
-        inset 0 1px 0 rgba(255, 255, 255, 0.96);
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+    border: 1px solid rgba(37, 99, 235, 0.25) !important;
+    box-shadow: 0 10px 25px rgba(37, 99, 235, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.95) !important;
 }
 
+/* ENTRADA: desliza desde el borde del dock con curva spring */
+.toast.toast-entering {
+    animation: toastSlideIn 0.42s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    visibility: visible !important;
+    pointer-events: auto;
+}
+
+@keyframes toastSlideIn {
+    0% {
+        transform: translate3d(var(--toast-x-start, 0px), var(--toast-y, 0px), 0) scale(0.7);
+        opacity: 0;
+        filter: blur(4px);
+    }
+    60% {
+        opacity: 1;
+        filter: blur(0px);
+    }
+    100% {
+        transform: translate3d(var(--toast-x-end, 0px), var(--toast-y, 0px), 0) scale(1);
+        opacity: 1;
+        filter: blur(0px);
+    }
+}
+
+/* VISIBLE: estático en endX */
 .toast.show {
     transform: translate3d(var(--toast-x-end, 0px), var(--toast-y, 0px), 0);
     opacity: 1;
+    visibility: visible !important;
+    pointer-events: auto;
+}
+
+/*
+ * SALIDA: regresa con fluidez hacia el dock, pero desvanece su opacidad antes
+ * de alcanzar el cristal del dock, evitando cualquier destello o ghost.
+ */
+.toast.toast-exiting {
+    animation: toastSlideOut 0.36s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    pointer-events: none;
+    visibility: visible !important;
+}
+
+@keyframes toastSlideOut {
+    0% {
+        transform: translate3d(var(--toast-x-end, 0px), var(--toast-y, 0px), 0) scale(1);
+        opacity: 1;
+        filter: blur(0px);
+    }
+    40% {
+        opacity: 0.8;
+    }
+    70% {
+        opacity: 0;
+        filter: blur(3px);
+    }
+    100% {
+        transform: translate3d(calc(var(--toast-x-start, 0px) + 24px), var(--toast-y, 0px), 0) scale(0.75);
+        opacity: 0;
+        filter: blur(4px);
+    }
 }
 
 .toast-icon-box {
@@ -1228,15 +1326,15 @@ button.config-item-button:active {
 .toast-message-text {
     white-space: nowrap;
     display: inline-block;
-    will-change: transform;
 }
 
 .toast-message-text.toast-marquee {
-    animation: toastMarqueeScroll var(--toast-marquee-duration, 4.5s) cubic-bezier(0.37, 0, 0.63, 1) infinite;
+    will-change: transform;
+    /* Inicia el marquee tras asentarse el toast para evitar doble animación en entrada */
+    animation: toastMarqueeScroll var(--toast-marquee-duration, 4.5s) cubic-bezier(0.37, 0, 0.63, 1) 0.35s infinite;
 }
 
 @keyframes toastMarqueeScroll {
-
     0%,
     18% {
         transform: translate3d(0, 0, 0);
@@ -1253,25 +1351,6 @@ button.config-item-button:active {
     }
 }
 
-
-/* ─── ANIMACIÓN TOAST: slide simple desde el dock ─── */
-
-/* Sin pseudo-element bridge. El dock (z:61000) cubre al toast (z:60000)
-   al inicio, dando la ilusión de que emerge de dentro del dock. */
-.toast::before {
-    display: none;
-}
-
-/* Entrada: fade + deslizamiento desde detrás del dock */
-.toast[data-toast-state="enter"] {
-    animation: toastSlideIn 340ms cubic-bezier(0.34, 1.04, 0.64, 1) both;
-}
-
-/* Salida: regresa detrás del dock */
-.toast[data-toast-state="exit"] {
-    animation: toastSlideOut 260ms cubic-bezier(0.4, 0, 1, 1) both;
-}
-
 /* ─── TOAST IZQUIERDA (LOADING) ─── */
 .toast.toast-left {
     height: auto;
@@ -1285,17 +1364,59 @@ button.config-item-button:active {
     padding: 12px 18px;
 }
 
-/* La animación izquierda es la misma — usa las mismas variables CSS */
-.toast.toast-left[data-toast-state="enter"] {
-    animation: toastSlideIn 340ms cubic-bezier(0.34, 1.04, 0.64, 1) both;
+/* Entrada toast izquierdo: desliza desde detrás del dock hacia la izquierda con spring */
+.toast.toast-left.toast-entering {
+    animation: toastSlideInLeft 0.42s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    visibility: visible !important;
+    pointer-events: auto;
 }
 
-.toast.toast-left[data-toast-state="exit"] {
-    animation: toastSlideOut 260ms cubic-bezier(0.4, 0, 1, 1) both;
+@keyframes toastSlideInLeft {
+    0% {
+        transform: translate3d(var(--toast-x-start, 0px), var(--toast-y, 0px), 0) scale(0.7);
+        opacity: 0;
+        filter: blur(4px);
+    }
+    60% {
+        opacity: 1;
+        filter: blur(0px);
+    }
+    100% {
+        transform: translate3d(var(--toast-x-end, 0px), var(--toast-y, 0px), 0) scale(1);
+        opacity: 1;
+        filter: blur(0px);
+    }
+}
+
+/* Salida toast izquierdo: regresa hacia el dock y desvanece antes de tocarlo */
+.toast.toast-left.toast-exiting {
+    animation: toastSlideOutLeft 0.36s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    pointer-events: none;
+    visibility: visible !important;
+}
+
+@keyframes toastSlideOutLeft {
+    0% {
+        transform: translate3d(var(--toast-x-end, 0px), var(--toast-y, 0px), 0) scale(1);
+        opacity: 1;
+        filter: blur(0px);
+    }
+    40% {
+        opacity: 0.8;
+    }
+    70% {
+        opacity: 0;
+        filter: blur(3px);
+    }
+    100% {
+        transform: translate3d(calc(var(--toast-x-start, 0px) - 24px), var(--toast-y, 0px), 0) scale(0.75);
+        opacity: 0;
+        filter: blur(4px);
+    }
 }
 
 /* =======================================================
-   LOADING BAR DEL TOAST
+   LOADING BAR DEL TOAST (GPU Aislada)
    ======================================================= */
 .toast-loading-bar {
     width: 220px;
@@ -1305,6 +1426,7 @@ button.config-item-button:active {
     overflow: hidden;
     background: rgba(var(--hover-acc-rgb), 0.12);
     border: 1px solid rgba(var(--hover-acc-rgb), 0.35);
+    contain: strict;
 }
 
 .toast-loading-bar-inner {
@@ -1316,7 +1438,10 @@ button.config-item-button:active {
             rgba(0, 243, 255, 0.10) 100%);
     border-radius: 999px;
     position: relative;
-    transform: translateX(-140%);
+    transform: translate3d(-140%, 0, 0);
+    will-change: transform;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
 }
 
 .toast-loading-bar-inner.anim {
@@ -1325,51 +1450,17 @@ button.config-item-button:active {
 
 @keyframes toastCyanSweep {
     0% {
-        transform: translateX(-140%);
+        transform: translate3d(-140%, 0, 0);
     }
 
     100% {
-        transform: translateX(260%);
-    }
-}
-
-/* =======================================================
-   ANIMACIONES DEL TOAST: SLIDE LIMPIO
-   El dock tiene z-index:61000 y el toast z-index:60000.
-   El toast arranca en startX (dentro del dock) y desliza
-   a endX (afuera). El dock lo cubre al inicio y al final,
-   creando la ilusión de que emerge/entra en el dock.
-   ======================================================= */
-
-/* Entrada — slide desde detrás del dock hacia afuera */
-@keyframes toastSlideIn {
-    0% {
-        opacity: 0;
-        transform: translate3d(var(--toast-x-start, 0px), var(--toast-y, 0px), 0);
-    }
-
-    100% {
-        opacity: 1;
-        transform: translate3d(var(--toast-x-end, 0px), var(--toast-y, 0px), 0);
-    }
-}
-
-/* Salida — regresa detrás del dock */
-@keyframes toastSlideOut {
-    0% {
-        opacity: 1;
-        transform: translate3d(var(--toast-x-end, 0px), var(--toast-y, 0px), 0);
-    }
-
-    100% {
-        opacity: 0;
-        transform: translate3d(var(--toast-x-start, 0px), var(--toast-y, 0px), 0);
+        transform: translate3d(260%, 0, 0);
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .toast[data-toast-state] {
-        animation-duration: 0.01ms !important;
+    .toast {
+        transition-duration: 0.01ms !important;
     }
 }
 
@@ -3813,47 +3904,82 @@ html[data-theme="light"] #dbStatusIcon {
 
 #tableBody tr {
     position: relative;
+    height: 48px !important;
+    max-height: 48px !important;
+    min-height: 48px !important;
+    box-sizing: border-box !important;
 }
 
-/* Eliminamos el borde individual de las celdas para unificar la fila */
+/* Eliminamos el borde individual de las celdas para unificar la fila y aseguramos altura fija */
 #tableBody tr td {
     border: none !important;
     background: transparent !important;
+    height: 48px !important;
+    max-height: 48px !important;
+    min-height: 48px !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    vertical-align: middle !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    box-sizing: border-box !important;
 }
 
-/* Base de la fila súper rápida */
+/* Base de la fila súper suave */
 #tableBody tr {
-    transition: background 0.1s ease-out;
+    transition: background 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
+                transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.03);
     /* Color de estado por defecto (cyan) */
-    --estado-color: rgba(6, 182, 212, 0.6);
+    --estado-color: rgba(6, 182, 212, 0.26);
+    --estado-glow: rgba(6, 182, 212, 0.12);
+    --estado-color-light: rgba(37, 99, 235, 0.18);
 }
 
 /* Capturamos los colores de los estados */
 #tableBody tr.neon-verde {
-    --estado-color: rgba(34, 197, 94, 0.6);
-    /* Verde completado */
+    --estado-color: rgba(34, 197, 94, 0.26);
+    --estado-glow: rgba(34, 197, 94, 0.12);
+    --estado-color-light: rgba(34, 197, 94, 0.20);
 }
 
 #tableBody tr.neon-rojo {
-    --estado-color: rgba(239, 68, 68, 0.6);
-    /* Rojo error/bloqueo */
+    --estado-color: rgba(239, 68, 68, 0.26);
+    --estado-glow: rgba(239, 68, 68, 0.12);
+    --estado-color-light: rgba(239, 68, 68, 0.20);
 }
 
 #tableBody tr.neon-amarillo {
-    --estado-color: rgba(255, 184, 0, 0.6);
-    /* Amarillo pendiente */
+    --estado-color: rgba(245, 158, 11, 0.26);
+    --estado-glow: rgba(245, 158, 11, 0.12);
+    --estado-color-light: rgba(245, 158, 11, 0.20);
 }
 
-/* El efecto Hover: Nace fuerte a la izquierda, se vuelve azul tenue y desaparece */
+/* El efecto Hover: Difuminado continuo y suave que ilumina toda la fila sin divisiones */
 #tableBody tr:hover {
     background: linear-gradient(90deg,
-            var(--estado-color) 0%,
-            rgba(6, 182, 212, 0.15) 15%,
+            var(--estado-color, rgba(6, 182, 212, 0.26)) 0%,
+            var(--estado-glow, rgba(6, 182, 212, 0.12)) 22%,
+            rgba(255, 255, 255, 0.035) 55%,
             transparent 100%) !important;
     cursor: pointer;
-    box-shadow: none !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05),
+                inset 0 -1px 0 rgba(255, 255, 255, 0.02),
+                0 4px 16px rgba(0, 0, 0, 0.3) !important;
     outline: none !important;
+}
+
+[data-theme="light"] #tableBody tr:hover {
+    background: linear-gradient(90deg,
+            var(--estado-color-light, rgba(37, 99, 235, 0.18)) 0%,
+            rgba(37, 99, 235, 0.08) 25%,
+            rgba(37, 99, 235, 0.03) 60%,
+            transparent 100%) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7),
+                inset 0 -1px 0 rgba(37, 99, 235, 0.05),
+                0 3px 12px rgba(37, 99, 235, 0.08) !important;
 }
 
 /* ==========================================================================
@@ -5195,14 +5321,19 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
     position: relative !important;
     display: inline-flex !important;
     align-items: center;
-    gap: 7px;
-    padding: 3.5px 12px;
+    gap: 6px;
+    padding: 0 10px !important;
+    height: 24px !important;
+    max-height: 24px !important;
+    line-height: 24px !important;
+    box-sizing: border-box !important;
     border-radius: 9999px;
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.035em;
     z-index: 1;
-    overflow: hidden;
+    overflow: hidden !important;
+    contain: paint !important;
     user-select: none;
     white-space: nowrap;
     animation: badgeSmoothEntrance 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -6180,4 +6311,1109 @@ to-purple-* en config avatar ── */ [data-theme="light"] .from-cyan-400.to-pu
     opacity: 0.65 !important;
     filter: grayscale(0.3) !important;
     transform: scale(1.01) !important;
+}
+
+/* ============================================================
+   PANEL DE ACCIONES OPERATIVAS — DISEÑO PREMIUM NEÓN TRANSPARENTE
+   ============================================================ */
+
+/* Base píldora transparente con glassmorphism */
+.op-pill-btn {
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.035);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+[data-theme="light"] .op-pill-btn {
+    background: rgba(0, 0, 0, 0.03);
+}
+
+.op-pill-btn:active {
+    transform: scale(0.96);
+}
+
+/* 1. Variante WOM: Morado Neón */
+.op-neon-wom {
+    border: 1.5px solid rgba(176, 38, 255, 0.55);
+    color: #e879f9;
+    background: rgba(176, 38, 255, 0.05);
+    box-shadow: 0 0 16px rgba(176, 38, 255, 0.20), inset 0 0 10px rgba(176, 38, 255, 0.06);
+}
+
+[data-theme="light"] .op-neon-wom {
+    border-color: rgba(168, 85, 247, 0.65);
+    color: #9333ea;
+    background: rgba(168, 85, 247, 0.06);
+    box-shadow: 0 0 14px rgba(168, 85, 247, 0.18);
+}
+
+.op-neon-wom:hover {
+    border-color: #c026d3;
+    background: rgba(176, 38, 255, 0.14);
+    box-shadow: 0 0 26px rgba(176, 38, 255, 0.55), inset 0 0 14px rgba(176, 38, 255, 0.25);
+    transform: translateY(-2px) scale(1.03);
+    color: #f5d0fe;
+}
+
+[data-theme="light"] .op-neon-wom:hover {
+    color: #7e22ce;
+    background: rgba(168, 85, 247, 0.14);
+}
+
+/* 2. Variante ETB: Azul / Cyan Neón */
+.op-neon-etb {
+    border: 1.5px solid rgba(0, 243, 255, 0.55);
+    color: #67e8f9;
+    background: rgba(0, 243, 255, 0.05);
+    box-shadow: 0 0 16px rgba(0, 243, 255, 0.20), inset 0 0 10px rgba(0, 243, 255, 0.06);
+}
+
+[data-theme="light"] .op-neon-etb {
+    border-color: rgba(6, 182, 212, 0.65);
+    color: #0891b2;
+    background: rgba(6, 182, 212, 0.06);
+    box-shadow: 0 0 14px rgba(6, 182, 212, 0.18);
+}
+
+.op-neon-etb:hover {
+    border-color: #22d3ee;
+    background: rgba(0, 243, 255, 0.14);
+    box-shadow: 0 0 26px rgba(0, 243, 255, 0.55), inset 0 0 14px rgba(0, 243, 255, 0.25);
+    transform: translateY(-2px) scale(1.03);
+    color: #cffafe;
+}
+
+[data-theme="light"] .op-neon-etb:hover {
+    color: #0e7490;
+    background: rgba(6, 182, 212, 0.14);
+}
+
+/* 3. Variante Declaración de Registro: Cyan */
+.op-neon-cyan {
+    border: 1.5px solid rgba(0, 243, 255, 0.55);
+    color: #67e8f9;
+    background: rgba(0, 243, 255, 0.05);
+    box-shadow: 0 0 16px rgba(0, 243, 255, 0.20), inset 0 0 10px rgba(0, 243, 255, 0.06);
+}
+
+[data-theme="light"] .op-neon-cyan {
+    border-color: rgba(6, 182, 212, 0.7);
+    color: #0284c7;
+    background: rgba(6, 182, 212, 0.06);
+    box-shadow: 0 0 16px rgba(6, 182, 212, 0.2);
+}
+
+.op-neon-cyan:hover {
+    border-color: #00f3ff;
+    background: rgba(0, 243, 255, 0.15);
+    box-shadow: 0 0 28px rgba(0, 243, 255, 0.60), inset 0 0 16px rgba(0, 243, 255, 0.25);
+    transform: translateY(-2px) scale(1.02);
+    color: #ffffff;
+}
+
+[data-theme="light"] .op-neon-cyan:hover {
+    color: #0369a1;
+    background: rgba(6, 182, 212, 0.15);
+}
+
+/* 4. Variante Declaración No Oficial: Azul Oscuro */
+.op-neon-darkblue {
+    border: 1.5px solid rgba(37, 99, 235, 0.65);
+    color: #93c5fd;
+    background: rgba(30, 58, 138, 0.15);
+    box-shadow: 0 0 16px rgba(29, 78, 216, 0.35), inset 0 0 10px rgba(30, 58, 138, 0.2);
+}
+
+[data-theme="light"] .op-neon-darkblue {
+    border-color: rgba(29, 78, 216, 0.7);
+    color: #1d4ed8;
+    background: rgba(29, 78, 216, 0.06);
+    box-shadow: 0 0 16px rgba(29, 78, 216, 0.2);
+}
+
+.op-neon-darkblue:hover {
+    border-color: #3b82f6;
+    background: rgba(30, 58, 138, 0.32);
+    box-shadow: 0 0 28px rgba(37, 99, 235, 0.65), inset 0 0 16px rgba(37, 99, 235, 0.3);
+    transform: translateY(-2px) scale(1.02);
+    color: #dbeafe;
+}
+
+[data-theme="light"] .op-neon-darkblue:hover {
+    color: #1e40af;
+    background: rgba(29, 78, 216, 0.14);
+}
+
+/* 5. Variante Línea Relacionada */
+.op-pill-linea {
+    min-width: 230px;
+    height: 46px;
+    padding: 0 24px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    color: rgba(255, 255, 255, 0.9);
+    border: 1.5px solid rgba(148, 163, 184, 0.32);
+    background: rgba(255, 255, 255, 0.03);
+    box-shadow: 0 0 14px rgba(148, 163, 184, 0.12), inset 0 0 8px rgba(255, 255, 255, 0.02);
+}
+
+[data-theme="light"] .op-pill-linea {
+    color: #1e293b;
+    border-color: rgba(0, 0, 0, 0.18);
+    background: rgba(0, 0, 0, 0.03);
+}
+
+.op-pill-linea:hover {
+    border-color: rgba(56, 189, 248, 0.65);
+    box-shadow: 0 0 22px rgba(56, 189, 248, 0.35), inset 0 0 10px rgba(56, 189, 248, 0.1);
+    transform: translateY(-2px) scale(1.02);
+}
+
+/* Botones de operador pequeños (ETB / WOM) */
+.op-pill-operator {
+    width: 105px;
+    height: 46px;
+    padding: 0 16px;
+    flex-shrink: 0;
+}
+
+/* Botones de Declaración (Fila inferior) */
+.op-pill-decl {
+    min-height: 60px;
+    padding: 10px 24px;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.3;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    text-align: center;
+}
+
+/* Etiquetas de sección (REGISTRAR, DESBLOQUEAR, BLOQUEAR) */
+.op-section-label {
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: rgba(255, 255, 255, 0.85);
+    white-space: nowrap;
+    user-select: none;
+}
+
+[data-theme="light"] .op-section-label {
+    color: #1e293b;
+}
+
+/* Ajustes específicos de las imágenes de logos dentro de los botones */
+.op-icon-etb {
+    height: 28px;
+    width: auto;
+    max-width: 65px;
+    object-fit: contain;
+    display: block;
+    pointer-events: none;
+    filter: drop-shadow(0 0 6px rgba(0, 243, 255, 0.6));
+    transition: filter 0.25s ease, transform 0.25s ease;
+}
+
+.op-pill-operator:hover .op-icon-etb {
+    filter: drop-shadow(0 0 10px rgba(0, 243, 255, 0.9)) brightness(1.15);
+    transform: scale(1.06);
+}
+
+.op-icon-wom {
+    height: 38px;
+    width: auto;
+    max-width: 72px;
+    object-fit: contain;
+    display: block;
+    pointer-events: none;
+    filter: drop-shadow(0 0 6px rgba(176, 38, 255, 0.6));
+    transition: filter 0.25s ease, transform 0.25s ease;
+}
+
+.op-pill-operator:hover .op-icon-wom {
+    filter: drop-shadow(0 0 10px rgba(176, 38, 255, 0.95)) brightness(1.15);
+    transform: scale(1.06);
+}
+
+.op-icon-wom-decl {
+    height: 36px;
+    width: auto;
+    max-width: 62px;
+    object-fit: contain;
+    display: block;
+    pointer-events: none;
+    margin-left: 8px;
+    filter: drop-shadow(0 0 6px rgba(176, 38, 255, 0.6));
+    transition: filter 0.25s ease, transform 0.25s ease;
+}
+
+.op-pill-decl:hover .op-icon-wom-decl {
+    filter: drop-shadow(0 0 10px rgba(176, 38, 255, 0.95)) brightness(1.15);
+    transform: scale(1.06);
+}
+
+/* ============================================================
+   TARJETAS MODULARES OPERATIVAS (SIMILAR A MONITOREO DE ESTADO)
+   ============================================================ */
+
+/* Aurora Background Effect para tarjetas operativas */
+.op-card-registrar .aurora-bg,
+.op-card-split-ops .aurora-bg {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at center, rgba(255, 255, 255, 0.06) 0%, transparent 70%);
+    animation: auroraRotate 10s linear infinite;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* 1. Tarjeta Registrar (Azul Neón) */
+.op-card-registrar {
+    position: relative;
+    overflow: hidden;
+    min-height: 120px;
+    background: linear-gradient(135deg, rgba(0, 243, 255, 0.10) 0%, rgba(37, 99, 235, 0.05) 100%);
+    border: 1px solid rgba(0, 243, 255, 0.38);
+    box-shadow: 0 0 25px rgba(0, 243, 255, 0.12), inset 0 0 15px rgba(255, 255, 255, 0.03);
+    border-radius: 1.25rem;
+    transition: all 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.op-card-registrar:hover {
+    border-color: rgba(0, 243, 255, 0.6);
+    box-shadow: 0 0 35px rgba(0, 243, 255, 0.2), inset 0 0 20px rgba(0, 243, 255, 0.05);
+}
+
+[data-theme="light"] .op-card-registrar {
+    background: linear-gradient(135deg, rgba(6, 182, 212, 0.12) 0%, rgba(37, 99, 235, 0.06) 100%);
+    border-color: rgba(6, 182, 212, 0.45);
+    box-shadow: 0 4px 20px rgba(6, 182, 212, 0.12);
+}
+
+/* 2. Tarjeta Unificada Bloquear / Desbloquear (Un Mismo Div Dividido) */
+.op-card-split-ops {
+    position: relative;
+    overflow: hidden;
+    min-height: 120px;
+    background: rgba(15, 23, 42, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 0 25px rgba(0, 0, 0, 0.3), inset 0 0 15px rgba(255, 255, 255, 0.02);
+    border-radius: 1.25rem;
+    transition: all 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.op-card-split-ops:hover {
+    border-color: rgba(255, 255, 255, 0.22);
+    box-shadow: 0 0 35px rgba(0, 0, 0, 0.45), inset 0 0 20px rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="light"] .op-card-split-ops {
+    background: rgba(248, 250, 252, 0.85);
+    border-color: rgba(0, 0, 0, 0.12);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+}
+
+/* Zona Desbloquear (Verde) */
+.op-zone-desbloquear {
+    position: relative;
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.12) 0%, rgba(57, 255, 20, 0.04) 100%);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    transition: background 0.3s ease;
+}
+
+.op-zone-desbloquear:hover {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.18) 0%, rgba(57, 255, 20, 0.07) 100%);
+}
+
+[data-theme="light"] .op-zone-desbloquear {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.10) 0%, rgba(16, 185, 129, 0.04) 100%);
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .op-zone-desbloquear:hover {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(16, 185, 129, 0.07) 100%);
+}
+
+/* Zona Bloquear (Roja) */
+.op-zone-bloquear {
+    position: relative;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(255, 7, 58, 0.04) 100%);
+    transition: background 0.3s ease;
+}
+
+.op-zone-bloquear:hover {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.18) 0%, rgba(255, 7, 58, 0.07) 100%);
+}
+
+[data-theme="light"] .op-zone-bloquear {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.10) 0%, rgba(225, 29, 72, 0.04) 100%);
+}
+
+[data-theme="light"] .op-zone-bloquear:hover {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(225, 29, 72, 0.07) 100%);
+}
+
+/* Títulos con brillo neón */
+.op-title-registrar {
+    color: #00f3ff;
+    text-shadow: 0 0 10px rgba(0, 243, 255, 0.55);
+}
+
+[data-theme="light"] .op-title-registrar {
+    color: #0284c7;
+    text-shadow: none;
+}
+
+.op-badge-registrar {
+    background: rgba(0, 243, 255, 0.18);
+    color: #00f3ff;
+    border: 1px solid rgba(0, 243, 255, 0.35);
+    box-shadow: 0 0 8px rgba(0, 243, 255, 0.25);
+}
+
+[data-theme="light"] .op-badge-registrar {
+    background: rgba(2, 132, 199, 0.12);
+    color: #0369a1;
+    border-color: rgba(2, 132, 199, 0.28);
+    box-shadow: none;
+}
+
+.op-title-desbloquear {
+    color: #39FF14;
+    text-shadow: 0 0 10px rgba(57, 255, 20, 0.55);
+}
+
+[data-theme="light"] .op-title-desbloquear {
+    color: #16a34a;
+    text-shadow: none;
+}
+
+.op-badge-desbloquear {
+    background: rgba(57, 255, 20, 0.18);
+    color: #39FF14;
+    border: 1px solid rgba(57, 255, 20, 0.35);
+    box-shadow: 0 0 8px rgba(57, 255, 20, 0.25);
+}
+
+[data-theme="light"] .op-badge-desbloquear {
+    background: rgba(22, 163, 74, 0.12);
+    color: #166534;
+    border-color: rgba(22, 163, 74, 0.28);
+    box-shadow: none;
+}
+
+.op-title-bloquear {
+    color: #ff3b5c;
+    text-shadow: 0 0 10px rgba(255, 7, 58, 0.55);
+}
+
+[data-theme="light"] .op-title-bloquear {
+    color: #dc2626;
+    text-shadow: none;
+}
+
+.op-badge-bloquear {
+    background: rgba(255, 7, 58, 0.18);
+    color: #ff073a;
+    border: 1px solid rgba(255, 7, 58, 0.35);
+    box-shadow: 0 0 8px rgba(255, 7, 58, 0.25);
+}
+
+[data-theme="light"] .op-badge-bloquear {
+    background: rgba(220, 38, 38, 0.12);
+    color: #991b1b;
+    border-color: rgba(220, 38, 38, 0.28);
+    box-shadow: none;
+}
+
+.op-label-linea {
+    color: rgba(0, 243, 255, 0.85);
+}
+
+[data-theme="light"] .op-label-linea {
+    color: #0369a1;
+}
+
+.op-text-linea-sub {
+    color: rgba(255, 255, 255, 0.75);
+}
+
+[data-theme="light"] .op-text-linea-sub {
+    color: #475569;
+}
+
+.op-text-linea-num {
+    color: #00f3ff;
+    text-shadow: 0 0 8px rgba(0, 243, 255, 0.5);
+}
+
+[data-theme="light"] .op-text-linea-num {
+    color: #0284c7;
+    text-shadow: none;
+}
+
+/* ============================================================
+   BOTONES DE OPERADORES — TEXTO COLOR Y LOGO NEON TORCIDO EN FONDO
+   ============================================================ */
+
+.op-operator-btn {
+    position: relative;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    transition: all 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+    isolation: isolate;
+}
+
+.op-operator-bg-icon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 78%;
+    height: 78%;
+    object-fit: contain;
+    transform: translate(-50%, -50%) rotate(-14deg) scale(1.32);
+    opacity: 0.28;
+    pointer-events: none;
+    z-index: 1;
+    /* SVG ya tiene color interno — el drop-shadow actúa sobre él */
+    filter: drop-shadow(0 0 6px currentColor) drop-shadow(0 0 12px currentColor);
+    transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.35s ease, filter 0.35s ease;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+.op-operator-btn:hover .op-operator-bg-icon {
+    transform: translate(-50%, -50%) rotate(-8deg) scale(1.48);
+    opacity: 0.44;
+    filter: drop-shadow(0 0 8px currentColor) drop-shadow(0 0 18px currentColor);
+}
+
+.op-operator-text {
+    position: relative;
+    z-index: 2;
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    display: inline-block;
+}
+
+/* Colores Neón por Operador */
+.op-btn-wom {
+    border: 1.5px solid rgba(176, 38, 255, 0.55) !important;
+    color: #e879f9 !important;
+    background: rgba(176, 38, 255, 0.08) !important;
+    box-shadow: 0 0 16px rgba(176, 38, 255, 0.20), inset 0 0 10px rgba(176, 38, 255, 0.06);
+}
+.op-btn-wom:hover {
+    border-color: #c026d3 !important;
+    color: #f5d0fe !important;
+    background: rgba(176, 38, 255, 0.18) !important;
+    box-shadow: 0 0 26px rgba(176, 38, 255, 0.55), inset 0 0 14px rgba(176, 38, 255, 0.22);
+    transform: translateY(-2px) scale(1.03);
+}
+
+[data-theme="light"] .op-btn-wom {
+    border-color: rgba(168, 85, 247, 0.65) !important;
+    color: #9333ea !important;
+    background: rgba(168, 85, 247, 0.08) !important;
+}
+[data-theme="light"] .op-btn-wom:hover {
+    color: #7e22ce !important;
+    background: rgba(168, 85, 247, 0.18) !important;
+}
+
+.op-btn-etb {
+    border: 1.5px solid rgba(0, 243, 255, 0.55) !important;
+    color: #67e8f9 !important;
+    background: rgba(0, 243, 255, 0.08) !important;
+    box-shadow: 0 0 16px rgba(0, 243, 255, 0.20), inset 0 0 10px rgba(0, 243, 255, 0.06);
+}
+.op-btn-etb:hover {
+    border-color: #22d3ee !important;
+    color: #cffafe !important;
+    background: rgba(0, 243, 255, 0.18) !important;
+    box-shadow: 0 0 26px rgba(0, 243, 255, 0.55), inset 0 0 14px rgba(0, 243, 255, 0.22);
+    transform: translateY(-2px) scale(1.03);
+}
+
+[data-theme="light"] .op-btn-etb {
+    border-color: rgba(6, 182, 212, 0.65) !important;
+    color: #0891b2 !important;
+    background: rgba(6, 182, 212, 0.08) !important;
+}
+[data-theme="light"] .op-btn-etb:hover {
+    color: #0e7490 !important;
+    background: rgba(6, 182, 212, 0.18) !important;
+}
+
+.op-btn-claro {
+    border: 1.5px solid rgba(239, 68, 68, 0.55) !important;
+    color: #f87171 !important;
+    background: rgba(239, 68, 68, 0.08) !important;
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.20), inset 0 0 10px rgba(239, 68, 68, 0.06);
+}
+.op-btn-claro:hover {
+    border-color: #ef4444 !important;
+    color: #fee2e2 !important;
+    background: rgba(239, 68, 68, 0.18) !important;
+    box-shadow: 0 0 26px rgba(239, 68, 68, 0.55), inset 0 0 14px rgba(239, 68, 68, 0.22);
+    transform: translateY(-2px) scale(1.03);
+}
+
+[data-theme="light"] .op-btn-claro {
+    border-color: rgba(220, 38, 38, 0.65) !important;
+    color: #b91c1c !important;
+    background: rgba(220, 38, 38, 0.08) !important;
+}
+[data-theme="light"] .op-btn-claro:hover {
+    color: #991b1b !important;
+    background: rgba(220, 38, 38, 0.18) !important;
+}
+
+.op-btn-tigo {
+    border: 1.5px solid rgba(59, 130, 246, 0.55) !important;
+    color: #60a5fa !important;
+    background: rgba(59, 130, 246, 0.08) !important;
+    box-shadow: 0 0 16px rgba(59, 130, 246, 0.20), inset 0 0 10px rgba(59, 130, 246, 0.06);
+}
+.op-btn-tigo:hover {
+    border-color: #3b82f6 !important;
+    color: #dbeafe !important;
+    background: rgba(59, 130, 246, 0.18) !important;
+    box-shadow: 0 0 26px rgba(59, 130, 246, 0.55), inset 0 0 14px rgba(59, 130, 246, 0.22);
+    transform: translateY(-2px) scale(1.03);
+}
+
+[data-theme="light"] .op-btn-tigo {
+    border-color: rgba(37, 99, 235, 0.65) !important;
+    color: #1d4ed8 !important;
+    background: rgba(37, 99, 235, 0.08) !important;
+}
+[data-theme="light"] .op-btn-tigo:hover {
+    color: #1e40af !important;
+    background: rgba(37, 99, 235, 0.18) !important;
+}
+
+/* ============================================================
+   DECLARACIÓN DE REGISTRO — BOTÓN DIVIDIDO EN 4 AL HOVER
+   ============================================================ */
+
+.op-decl-split-container {
+    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    min-height: 60px;
+    padding: 0 !important;
+}
+
+.op-decl-reg-default {
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    width: 100%;
+    height: 100%;
+}
+
+.op-decl-reg-split {
+    transition: opacity 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    transform: scale(0.96);
+    pointer-events: none;
+}
+
+.op-decl-split-container:hover .op-decl-reg-default {
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.92);
+}
+
+.op-decl-split-container:hover .op-decl-reg-split {
+    opacity: 1;
+    pointer-events: auto;
+    transform: scale(1);
+}
+
+.op-quad-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 4px 6px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.22s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.op-quad-btn:active {
+    transform: scale(0.94);
+}
+
+/* 1. Claro (Rojo) */
+.op-quad-claro {
+    background: rgba(239, 68, 68, 0.15);
+    border-right: 1px solid rgba(239, 68, 68, 0.28);
+}
+.op-quad-claro:hover {
+    background: rgba(239, 68, 68, 0.35);
+    box-shadow: inset 0 0 16px rgba(239, 68, 68, 0.6);
+}
+
+/* 2. Tigo (Azul) */
+.op-quad-tigo {
+    background: rgba(59, 130, 246, 0.15);
+    border-right: 1px solid rgba(59, 130, 246, 0.28);
+}
+.op-quad-tigo:hover {
+    background: rgba(59, 130, 246, 0.35);
+    box-shadow: inset 0 0 16px rgba(59, 130, 246, 0.6);
+}
+
+/* 3. ETB (Cyan) */
+.op-quad-etb {
+    background: rgba(0, 243, 255, 0.15);
+    border-right: 1px solid rgba(0, 243, 255, 0.28);
+}
+.op-quad-etb:hover {
+    background: rgba(0, 243, 255, 0.35);
+    box-shadow: inset 0 0 16px rgba(0, 243, 255, 0.6);
+}
+
+/* 4. WOM (Morado) */
+.op-quad-wom {
+    background: rgba(176, 38, 255, 0.15);
+}
+.op-quad-wom:hover {
+    background: rgba(176, 38, 255, 0.35);
+    box-shadow: inset 0 0 16px rgba(176, 38, 255, 0.6);
+}
+
+.op-quad-img {
+    height: 32px;
+    width: auto;
+    max-width: 82%;
+    object-fit: contain;
+    pointer-events: none;
+    transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), filter 0.22s ease;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    /* Glow base para que el logo se vea aun en estado normal */
+    filter: brightness(1.1);
+}
+
+.op-quad-btn:hover .op-quad-img {
+    transform: scale(1.15);
+}
+
+/* Glow neon al hover — actúa sobre el color propio del SVG */
+.op-quad-claro:hover .op-quad-img { filter: drop-shadow(0 0 6px #FF1A1A) drop-shadow(0 0 14px #FF0000) brightness(1.2); }
+.op-quad-tigo:hover .op-quad-img  { filter: drop-shadow(0 0 6px #3B82F6) drop-shadow(0 0 14px #2563EB) brightness(1.2); }
+.op-quad-etb:hover .op-quad-img   { filter: drop-shadow(0 0 6px #00DDFF) drop-shadow(0 0 14px #00F3FF) brightness(1.2); }
+.op-quad-wom:hover .op-quad-img   { filter: drop-shadow(0 0 6px #CC00FF) drop-shadow(0 0 14px #B026FF) brightness(1.2); }
+
+/* ============================================================
+   MODAL DECLARACIÓN NO OFICIAL (SLIDER 4 OPERADORES)
+   ============================================================ */
+
+.dno-tab-container {
+    position: relative;
+    height: 50px;
+    background: rgba(15, 23, 42, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    padding: 4px;
+    display: flex;
+    overflow: hidden;
+    backdrop-filter: blur(12px);
+}
+
+[data-theme="light"] .dno-tab-container {
+    background: rgba(241, 245, 249, 0.9);
+    border-color: rgba(0, 0, 0, 0.12);
+}
+
+.dno-tab {
+    flex: 1;
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: color 0.25s ease, transform 0.2s ease;
+    user-select: none;
+}
+
+[data-theme="light"] .dno-tab {
+    color: rgba(15, 23, 42, 0.6);
+}
+
+.dno-tab:hover {
+    color: rgba(255, 255, 255, 0.95);
+    transform: translateY(-1px);
+}
+
+[data-theme="light"] .dno-tab:hover {
+    color: rgba(15, 23, 42, 0.95);
+}
+
+.dno-tab-icon {
+    height: 22px;
+    width: auto;
+    max-width: 42px;
+    object-fit: contain;
+    filter: brightness(1.05);
+    pointer-events: none;
+    transition: transform 0.25s ease, filter 0.25s ease;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+.dno-tab:hover .dno-tab-icon {
+    transform: scale(1.12);
+    filter: brightness(1.2) drop-shadow(0 0 6px currentColor);
+}
+
+/* Glow neon por operador en tab activo */
+#dnoTabClaro.dno-tab-active .dno-tab-icon  { filter: drop-shadow(0 0 5px #FF1A1A) drop-shadow(0 0 10px #FF0000); }
+#dnoTabTigo.dno-tab-active .dno-tab-icon   { filter: drop-shadow(0 0 5px #3B82F6) drop-shadow(0 0 10px #2563EB); }
+#dnoTabEtb.dno-tab-active .dno-tab-icon    { filter: drop-shadow(0 0 5px #00DDFF) drop-shadow(0 0 10px #00F3FF); }
+#dnoTabWom.dno-tab-active .dno-tab-icon    { filter: drop-shadow(0 0 5px #CC00FF) drop-shadow(0 0 10px #B026FF); }
+
+/* Slider indicator animado con ancho 1/4 */
+.dno-tab-slider {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    height: calc(100% - 8px);
+    width: calc((100% - 8px) / 4);
+    border-radius: 12px;
+    transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1), background 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* Posiciones slider */
+.dno-tab-slider.dno-slider-pos-0 { transform: translateX(0); }
+.dno-tab-slider.dno-slider-pos-1 { transform: translateX(100%); }
+.dno-tab-slider.dno-slider-pos-2 { transform: translateX(200%); }
+.dno-tab-slider.dno-slider-pos-3 { transform: translateX(300%); }
+
+/* Colores específicos del slider por operador */
+.dno-tab-slider.dno-color-claro {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.24), rgba(220, 38, 38, 0.12));
+    border: 1.5px solid rgba(239, 68, 68, 0.65);
+    box-shadow: 0 0 18px rgba(239, 68, 68, 0.38), inset 0 0 10px rgba(239, 68, 68, 0.14);
+}
+.dno-tab-slider.dno-color-tigo {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.24), rgba(37, 99, 235, 0.12));
+    border: 1.5px solid rgba(59, 130, 246, 0.65);
+    box-shadow: 0 0 18px rgba(59, 130, 246, 0.38), inset 0 0 10px rgba(59, 130, 246, 0.14);
+}
+.dno-tab-slider.dno-color-etb {
+    background: linear-gradient(135deg, rgba(0, 243, 255, 0.24), rgba(6, 182, 212, 0.12));
+    border: 1.5px solid rgba(0, 243, 255, 0.65);
+    box-shadow: 0 0 18px rgba(0, 243, 255, 0.38), inset 0 0 10px rgba(0, 243, 255, 0.14);
+}
+.dno-tab-slider.dno-color-wom {
+    background: linear-gradient(135deg, rgba(176, 38, 255, 0.24), rgba(147, 51, 234, 0.12));
+    border: 1.5px solid rgba(176, 38, 255, 0.65);
+    box-shadow: 0 0 18px rgba(176, 38, 255, 0.38), inset 0 0 10px rgba(176, 38, 255, 0.14);
+}
+
+/* Tab activo texto neon */
+#dnoTabClaro.dno-tab-active { color: #f87171 !important; text-shadow: 0 0 10px rgba(239, 68, 68, 0.6); }
+#dnoTabTigo.dno-tab-active { color: #60a5fa !important; text-shadow: 0 0 10px rgba(59, 130, 246, 0.6); }
+#dnoTabEtb.dno-tab-active { color: #67e8f9 !important; text-shadow: 0 0 10px rgba(0, 243, 255, 0.6); }
+#dnoTabWom.dno-tab-active { color: #e879f9 !important; text-shadow: 0 0 10px rgba(176, 38, 255, 0.6); }
+
+/* Tarjetas de estado / acciones */
+.dno-action-btn {
+    position: relative;
+    padding: 16px 20px;
+    border-radius: 18px;
+    border: 1.5px solid rgba(255, 255, 255, 0.10);
+    background: rgba(255, 255, 255, 0.035);
+    backdrop-filter: blur(14px);
+    cursor: pointer;
+    overflow: hidden;
+    transition: all 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+    user-select: none;
+    text-align: left;
+    display: flex;
+    align-items: center;
+}
+
+[data-theme="light"] .dno-action-btn {
+    background: rgba(0, 0, 0, 0.03);
+    border-color: rgba(0, 0, 0, 0.12);
+}
+
+.dno-action-bg-icon {
+    position: absolute;
+    right: -10px;
+    bottom: -15px;
+    width: 95px;
+    height: 95px;
+    object-fit: contain;
+    transform: rotate(-14deg);
+    opacity: 0.16;
+    pointer-events: none;
+    transition: transform 0.35s ease, opacity 0.35s ease;
+    z-index: 1;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: high-quality;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+.dno-action-btn:hover .dno-action-bg-icon {
+    transform: rotate(-8deg) scale(1.18);
+    opacity: 0.32;
+}
+
+.dno-icon-box {
+    width: 44px;
+    height: 44px;
+    border-radius: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: transform 0.25s ease;
+}
+
+.dno-action-btn:hover .dno-icon-box {
+    transform: scale(1.08);
+}
+
+.dno-action-title {
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    display: block;
+    line-height: 1.2;
+}
+
+.dno-action-sub {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.55);
+    letter-spacing: 0.01em;
+    margin-top: 3px;
+    display: block;
+}
+
+[data-theme="light"] .dno-action-sub {
+    color: rgba(15, 23, 42, 0.65);
+}
+
+/* Hover estados específicos */
+.dno-action-bloqueado:hover {
+    border-color: rgba(239, 68, 68, 0.65);
+    background: rgba(239, 68, 68, 0.10);
+    box-shadow: 0 0 24px rgba(239, 68, 68, 0.28), inset 0 0 12px rgba(239, 68, 68, 0.08);
+    transform: translateY(-2px);
+}
+
+.dno-action-desbloqueado:hover {
+    border-color: rgba(16, 185, 129, 0.65);
+    background: rgba(16, 185, 129, 0.10);
+    box-shadow: 0 0 24px rgba(16, 185, 129, 0.28), inset 0 0 12px rgba(16, 185, 129, 0.08);
+    transform: translateY(-2px);
+}
+
+.dno-action-desb-proceso:hover {
+    border-color: rgba(245, 158, 11, 0.65);
+    background: rgba(245, 158, 11, 0.10);
+    box-shadow: 0 0 24px rgba(245, 158, 11, 0.28), inset 0 0 12px rgba(245, 158, 11, 0.08);
+    transform: translateY(-2px);
+}
+
+.dno-action-bloq-proceso:hover {
+    border-color: rgba(249, 115, 22, 0.65);
+    background: rgba(249, 115, 22, 0.10);
+    box-shadow: 0 0 24px rgba(249, 115, 22, 0.28), inset 0 0 12px rgba(249, 115, 22, 0.08);
+    transform: translateY(-2px);
+}
+
+/* Estados seleccionados para botones DNO */
+.dno-action-btn.dno-action-selected {
+    border-color: rgba(255, 255, 255, 0.45) !important;
+    transform: translateY(-2px);
+}
+.dno-action-bloqueado.dno-action-selected {
+    border-color: rgba(239, 68, 68, 0.9) !important;
+    background: rgba(239, 68, 68, 0.18) !important;
+    box-shadow: 0 0 25px rgba(239, 68, 68, 0.4), inset 0 0 10px rgba(239, 68, 68, 0.15) !important;
+}
+.dno-action-desbloqueado.dno-action-selected {
+    border-color: rgba(16, 185, 129, 0.9) !important;
+    background: rgba(16, 185, 129, 0.18) !important;
+    box-shadow: 0 0 25px rgba(16, 185, 129, 0.4), inset 0 0 10px rgba(16, 185, 129, 0.15) !important;
+}
+.dno-action-desb-proceso.dno-action-selected {
+    border-color: rgba(245, 158, 11, 0.9) !important;
+    background: rgba(245, 158, 11, 0.18) !important;
+    box-shadow: 0 0 25px rgba(245, 158, 11, 0.4), inset 0 0 10px rgba(245, 158, 11, 0.15) !important;
+}
+.dno-action-bloq-proceso.dno-action-selected {
+    border-color: rgba(249, 115, 22, 0.9) !important;
+    background: rgba(249, 115, 22, 0.18) !important;
+    box-shadow: 0 0 25px rgba(249, 115, 22, 0.4), inset 0 0 10px rgba(249, 115, 22, 0.15) !important;
+}
+
+/* Card Preview Declaración No Oficial (Formato Blanco Limpio) */
+.dno-card-wrapper {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05) !important;
+    border-radius: 18px !important;
+    overflow: hidden !important;
+}
+
+.dno-card-header {
+    background: #DA291C;
+    transition: background-color 0.3s ease;
+}
+
+.dno-card-header.dno-header-claro {
+    background: #DA291C !important;
+}
+
+.dno-card-header.dno-header-tigo {
+    background: #00377B !important;
+}
+
+.dno-card-header.dno-header-etb {
+    background: #005BAC !important;
+}
+
+.dno-card-header.dno-header-wom {
+    background: #5F259F !important;
+}
+
+.dno-header-logo-pill {
+    background: #ffffff !important;
+    padding: 6px 14px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+#dnoCardMessage {
+    color: #1e293b !important;
+    font-size: 1.05rem;
+    line-height: 1.65;
+}
+
+
+/* =========================================================================
+   PANEL DE AUDITORÍA Y REGISTRO DE ACTIVIDAD
+   ========================================================================= */
+#auditoriaOverlay {
+    z-index: 90000 !important;
+}
+
+#auditoriaOverlay .liquid-glass {
+    box-shadow:
+        0 32px 80px rgba(0, 0, 0, 0.75),
+        0 0 0 1px rgba(6, 182, 212, 0.3),
+        inset 0 0 40px rgba(6, 182, 212, 0.05);
+}
+
+#auditoriaDetalleModal {
+    z-index: 96000 !important;
+}
+
+#auditoriaDetalleModal .liquid-glass {
+    box-shadow:
+        0 32px 80px rgba(0, 0, 0, 0.8),
+        0 0 0 1px rgba(6, 182, 212, 0.35),
+        inset 0 0 30px rgba(6, 182, 212, 0.06);
+}
+
+[data-theme="light"] #auditoriaOverlay .liquid-glass {
+    background: rgba(255, 255, 255, 0.94) !important;
+    border-color: rgba(6, 182, 212, 0.35) !important;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.15) !important;
+}
+
+[data-theme="light"] #auditoriaOverlay th {
+    color: #475569 !important;
+}
+
+[data-theme="light"] #auditoriaOverlay td {
+    color: #0f172a !important;
+}
+
+[data-theme="light"] #auditoriaOverlay select,
+[data-theme="light"] #auditoriaOverlay input {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    border-color: rgba(0, 0, 0, 0.15) !important;
+}
+
+[data-theme="light"] #auditoriaDetalleModal .liquid-glass {
+    background: rgba(255, 255, 255, 0.96) !important;
+    border-color: rgba(6, 182, 212, 0.35) !important;
+    color: #0f172a !important;
+}
+
+[data-theme="light"] #auditoriaDetallePrevios,
+[data-theme="light"] #auditoriaDetalleNuevos {
+    background: #f8fafc !important;
+    color: #1e293b !important;
+    border-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+/* ==========================================
+   RESULT MODALS (REGISTRO RÁPIDO)
+   ========================================== */
+#rrModalResultadoIndividualOverlay,
+#rrModalResultadosMasivosOverlay {
+    z-index: 55500 !important;
+}
+
+#rrModalResultadoIndividualOverlay.active .liquid-glass,
+#rrModalResultadosMasivosOverlay.active .liquid-glass {
+    animation: rrModalScaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes rrModalScaleIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.96) translateY(10px);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
 }

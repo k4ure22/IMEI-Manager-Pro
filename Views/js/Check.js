@@ -68,7 +68,11 @@ function ckLimpiarResultado() {
 
 /* ─── VALIDAR IMEI ─── */
 function ckGetIMEI() {
-    const val = (document.getElementById('ckImeiInput')?.value || '').replace(/\D/g, '');
+    const raw = (document.getElementById('ckImeiInput')?.value || '').trim();
+    if (raw.toUpperCase() === 'ALTERADA' || raw.toUpperCase() === 'TEST_ALTERADA' || raw.toUpperCase() === 'TEST') {
+        return 'ALTERADA';
+    }
+    const val = raw.replace(/\D/g, '');
     if (val.length !== 15) {
         showToast('IMEI inválido — necesita 15 dígitos', 'warning');
         return null;
@@ -167,6 +171,17 @@ async function ckConsultarModeloPro() {
 
             showToast(`Modelo: ${res.modelo}`, 'success');
 
+        } else if (res.status === 'pagina_alterada') {
+            if (typeof window.mostrarModalPaginaAlterada === 'function') {
+                window.mostrarModalPaginaAlterada(res.pagina || 'iUnlocker', res.detalle);
+            }
+            ckMostrarResultado({
+                iconClass: 'ck-icon-error',
+                label: 'Página Modificada',
+                value: res.mensaje || 'La página ha sido modificada. Solicite soporte a Martin.'
+            });
+            showToast(res.mensaje || 'Página modificada', 'error');
+
         } else if (res.status === 'sin_cupos' || res.status === 'limite_web') {
             ckMostrarResultado({
                 iconClass: 'ck-icon-error',
@@ -237,6 +252,17 @@ async function ckConsultarModeloEstandar() {
 
             showToast(`Modelo: ${res.modelo}`, 'success');
 
+        } else if (res.status === 'pagina_alterada') {
+            if (typeof window.mostrarModalPaginaAlterada === 'function') {
+                window.mostrarModalPaginaAlterada(res.pagina || 'Movical', res.detalle);
+            }
+            ckMostrarResultado({
+                iconClass: 'ck-icon-error',
+                label: 'Página Modificada',
+                value: res.mensaje || 'La página ha sido modificada. Solicite soporte a Martin.'
+            });
+            showToast(res.mensaje || 'Página modificada', 'error');
+
         } else {
             ckMostrarResultado({
                 iconClass: 'ck-icon-error',
@@ -306,6 +332,17 @@ async function ckConsultarImeiColombia() {
 
             showToast(`Estado: ${res.estado} | ${res.operador}`, 'success');
 
+        } else if (res.status === 'pagina_alterada') {
+            if (typeof window.mostrarModalPaginaAlterada === 'function') {
+                window.mostrarModalPaginaAlterada(res.pagina || 'IMEI Colombia', res.detalle);
+            }
+            ckMostrarResultado({
+                iconClass: 'ck-icon-error',
+                label: 'Página Modificada',
+                value: res.mensaje || 'La página ha sido modificada. Solicite soporte a Martin.'
+            });
+            showToast(res.mensaje || 'Página modificada', 'error');
+
         } else {
             ckMostrarResultado({
                 iconClass: 'ck-icon-error',
@@ -341,7 +378,7 @@ async function ckConsultarBlacklist() {
     showToastLoading('Consultando Blacklist GSMA en iunlocker.com...');
 
     try {
-        const res = await window.pywebview.api.consultar_blacklist(imei, false, ckIsHeadless());
+        const res = await window.pywebview.api.consultar_blacklist(imei, true, ckIsHeadless());
         hideToastLoading();
 
         if (res.status === 'success') {
@@ -363,6 +400,17 @@ async function ckConsultarBlacklist() {
             }
 
             showToast(enBlacklist ? 'IMEI en Blacklist GSMA' : 'IMEI Limpio (Clean)', enBlacklist ? 'error' : 'success');
+
+        } else if (res.status === 'pagina_alterada') {
+            if (typeof window.mostrarModalPaginaAlterada === 'function') {
+                window.mostrarModalPaginaAlterada(res.pagina || 'iUnlocker Blacklist', res.detalle);
+            }
+            ckMostrarResultado({
+                iconClass: 'ck-icon-error',
+                label: 'Página Modificada',
+                value: res.mensaje || 'La página ha sido modificada. Solicite soporte a Martin.'
+            });
+            showToast(res.mensaje || 'Página modificada', 'error');
 
         } else if (res.status === 'sin_cupos' || res.status === 'limite_web') {
             ckMostrarResultado({

@@ -125,6 +125,18 @@ def consultar_modelos(imeis, headless: bool = False):
     temp_dir = os.path.join(base_dir, 'temp_screenshots')
     os.makedirs(temp_dir, exist_ok=True)
 
+    if any(str(x).strip().upper() in ("ALTERADA", "TEST_ALTERADA", "TEST") for x in imeis):
+        for imei in imeis:
+            print(json.dumps({
+                "status": "pagina_alterada",
+                "pagina": "Movical (Modelo Estándar)",
+                "mensaje": "El estado de la página Movical ha cambiado, por favor solicite soporte a Martin.",
+                "detalle": "Simulación de prueba: no se encontró el campo de búsqueda (searchomeinput) en movical.net.",
+                "imei": imei,
+                "modelo": "Error"
+            }), flush=True)
+        return
+
     try:
         log("Navegando a movical.net...")
         driver.get("https://www.movical.net")
@@ -133,6 +145,16 @@ def consultar_modelos(imeis, headless: bool = False):
             log("Input listo")
         except Exception as e_inp:
             log(f"No se encontró el input inicial: {e_inp}")
+            for imei in imeis:
+                print(json.dumps({
+                    "status": "pagina_alterada",
+                    "pagina": "Movical (Modelo Estándar)",
+                    "mensaje": "El estado de la página Movical ha cambiado, por favor solicite soporte a Martin.",
+                    "detalle": f"No se encontró el campo de búsqueda (searchomeinput) en movical.net. Error: {e_inp}",
+                    "imei": imei,
+                    "modelo": "Error"
+                }), flush=True)
+            return
 
         for imei in imeis:
             # Añadimos la clave pantallazo vacía por defecto

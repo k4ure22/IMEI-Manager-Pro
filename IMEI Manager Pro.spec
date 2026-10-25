@@ -13,6 +13,7 @@ from PyInstaller.utils.hooks import collect_all
 
 selenium_datas, selenium_binaries, selenium_hidden = collect_all('selenium')
 wdm_datas, wdm_binaries, wdm_hidden = collect_all('webdriver_manager')
+pypdfium2_datas, pypdfium2_binaries, pypdfium2_hidden = collect_all('pypdfium2')
 
 # Archivos y carpetas adicionales que deben ser empaquetados (sin archivos .py sueltos para proteger el código fuente)
 mis_datas = [
@@ -29,7 +30,7 @@ for src, dst in [
     if os.path.exists(src):
         mis_datas.append((src, dst))
 
-mis_datas += selenium_datas + wdm_datas
+mis_datas += selenium_datas + wdm_datas + pypdfium2_datas
 
 scripts_to_analyze = [
     'Controllers/main.py',
@@ -42,7 +43,8 @@ scripts_to_analyze = [
     'Controllers/consultar_imei.py',
     'Controllers/TomarPantallazo.py',
     'Controllers/EnviarCorreoWom.py',
-    'Controllers/EstilizadorPantallazo.py'
+    'Controllers/EstilizadorPantallazo.py',
+    'Controllers/NotificadorAlteracion.py',
 ]
 
 hidden_imports = [
@@ -59,6 +61,7 @@ hidden_imports = [
     'Controllers.TomarPantallazo',
     'Controllers.EnviarCorreoWom',
     'Controllers.EstilizadorPantallazo',
+    'Controllers.NotificadorAlteracion',
     'GeneradorPDF',
     'ConsultarModelo',
     'ConsultarModeloPro',
@@ -69,12 +72,14 @@ hidden_imports = [
     'TomarPantallazo',
     'EnviarCorreoWom',
     'EstilizadorPantallazo',
+    'NotificadorAlteracion',
     'reportlab',
     'reportlab.pdfgen.canvas',
     'reportlab.lib.pagesizes',
     'reportlab.pdfbase.pdfmetrics',
     'reportlab.pdfbase.ttfonts',
     'pypdf',
+    'pypdfium2',
     'fpdf',
     'PIL',
     'PIL.Image',
@@ -106,14 +111,21 @@ hidden_imports = [
     'storage3',
     'openpyxl',
     'certifi',
+    'requests',
+    'urllib3',
     'xlwings',
+    'smtplib',
+    'email',
+    'email.mime',
+    'email.mime.multipart',
+    'email.mime.text',
     # unittest es requerido por pyparsing (dependencia transitiva de supabase/storage3)
     'unittest',
     'unittest.mock',
-] + selenium_hidden + wdm_hidden
+] + selenium_hidden + wdm_hidden + pypdfium2_hidden
 
 chromedriver_bin = 'chromedriver'
-mis_binaries = [] + selenium_binaries + wdm_binaries
+mis_binaries = [] + selenium_binaries + wdm_binaries + pypdfium2_binaries
 if os.path.exists(chromedriver_bin):
     mis_binaries.append((chromedriver_bin, '.'))
 

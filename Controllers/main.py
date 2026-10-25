@@ -40,7 +40,8 @@ if len(sys.argv) >= 2:
     elif first_arg.endswith('.py') or first_arg in [
         'GeneradorPDF', 'ConsultarModelo', 'ConsultarModeloPro',
         'RegistrarWom', 'RegistrarEtb', 'consultar_imei',
-        'TomarPantallazo', 'EnviarCorreoWom', 'EstilizadorPantallazo', 'blacklist'
+        'TomarPantallazo', 'EnviarCorreoWom', 'EstilizadorPantallazo', 'blacklist',
+        'NotificadorAlteracion'
     ]:
         target_mod = os.path.splitext(os.path.basename(first_arg))[0]
         args_offset = 2
@@ -630,6 +631,7 @@ class Api:
     def __init__(self):
         self.window = None
         self.current_user = None
+        self.auditoria_tabla_disponible = False
         self._init_supabase_config()
         print(" [API] Conectado a Supabase IMPDB.")
         
@@ -757,8 +759,372 @@ class Api:
                         supabase.table('clientes').update({'oculto': True}).eq('id', cid).execute()
                 except Exception:
                     pass
+
+            # Verificar tabla de auditoría en Supabase
+            try:
+                res_aud = supabase.table('auditoria').select('id').limit(1).execute()
+                self.auditoria_tabla_disponible = True
+                print(" [SUPABASE] Tabla 'auditoria' detectada y activa.")
+            except Exception:
+                self.auditoria_tabla_disponible = False
+                print(" [SUPABASE] Tabla 'auditoria' no detectada; usando almacenamiento fallback en 'configuracion'.")
+
+            # Asegurar tabla auditoria en SQLite local
+            try:
+                import sqlite3
+                db_local = os.path.join(MODELS_DIR, "imei_database.db")
+                if os.path.exists(db_local):
+                    conn = sqlite3.connect(db_local)
+                    cur = conn.cursor()
+                    cur.execute('''
+                        CREATE TABLE IF NOT EXISTS auditoria (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            fecha TEXT,
+                            usuario TEXT,
+                            nombre_usuario TEXT,
+                            rol TEXT,
+                            accion TEXT,
+                            modulo TEXT,
+                            registro_id TEXT,
+                            detalles TEXT,
+                            datos_previos TEXT,
+                            datos_nuevos TEXT
+                        )
+                    ''')
+                    conn.commit()
+                    conn.close()
+            except Exception:
+                pass
         except Exception as e:
             print(f" [SUPABASE] No se pudo verificar configuración inicial: {e}")
+
+    # ── AUDITORÍA Y REGISTRO DE ACCIONES ────────────────────────────
+
+    def _registrar_auditoria(self, accion: str, modulo: str, detalles: str,
+                             registro_id: str = "", datos_previos=None, datos_nuevos=None,
+                             usuario: str = None, nombre_usuario: str = None, rol: str = None):
+        """
+        Registra una acción de usuario en la base de datos (Supabase auditoria / fallback).
+        Se ejecuta de forma asíncrona para no bloquear las transacciones del usuario.
+        """
+        try:
+            # Determinar usuario
+            u_email = usuario or (self.current_user.get('usuario') if self.current_user else 'Sistema')
+            u_nombre = nombre_usuario or (self.current_user.get('nombre') if self.current_user else (u_email.split('@')[0] if '@' in u_email else u_email))
+            u_rol = rol or (self.current_user.get('rol') if self.current_user else 'user')
+
+            from datetime import datetime, timezone
+            try:
+                ahora_iso = datetime.now(timezone.utc).isoformat()
+            except Exception:
+                ahora_iso = datetime.now().isoformat()
+
+            import json
+            prev_str = json.dumps(datos_previos, ensure_ascii=False) if isinstance(datos_previos, (dict, list)) else (str(datos_previos) if datos_previos is not None else "")
+            new_str = json.dumps(datos_nuevos, ensure_ascii=False) if isinstance(datos_nuevos, (dict, list)) else (str(datos_nuevos) if datos_nuevos is not None else "")
+
+            payload = {
+                "fecha": ahora_iso,
+                "usuario": u_email,
+                "nombre_usuario": u_nombre,
+                "rol": u_rol,
+                "accion": str(accion).upper(),
+                "modulo": str(modulo),
+                "registro_id": str(registro_id or ""),
+                "detalles": str(detalles),
+                "datos_previos": prev_str or None,
+                "datos_nuevos": new_str or None
+            }
+
+            def _bg_guardar():
+                guardado_nativo = False
+                if self.auditoria_tabla_disponible:
+                    try:
+                        safe_supabase(lambda: supabase.table('auditoria').insert(payload).execute())
+                        guardado_nativo = True
+                    except Exception:
+                        self.auditoria_tabla_disponible = False
+
+                if not guardado_nativo:
+                    try:
+                        import time, uuid
+                        key = f"auditoria_log:{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}"
+                        val = json.dumps(payload, ensure_ascii=False)
+                        safe_supabase(lambda: supabase.table('configuracion').upsert({'clave': key, 'valor': val}).execute())
+                    except Exception as e_fb:
+                        print(f" [Auditoría] Aviso al guardar fallback: {e_fb}")
+
+                # Guardar copia local en SQLite
+                try:
+                    import sqlite3
+                    db_local = os.path.join(MODELS_DIR, "imei_database.db")
+                    if os.path.exists(db_local):
+                        conn = sqlite3.connect(db_local)
+                        cur = conn.cursor()
+                        cur.execute('''
+                            CREATE TABLE IF NOT EXISTS auditoria (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                fecha TEXT,
+                                usuario TEXT,
+                                nombre_usuario TEXT,
+                                rol TEXT,
+                                accion TEXT,
+                                modulo TEXT,
+                                registro_id TEXT,
+                                detalles TEXT,
+                                datos_previos TEXT,
+                                datos_nuevos TEXT
+                            )
+                        ''')
+                        cur.execute('''
+                            INSERT INTO auditoria (fecha, usuario, nombre_usuario, rol, accion, modulo, registro_id, detalles, datos_previos, datos_nuevos)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (ahora_iso, u_email, u_nombre, u_rol, payload['accion'], payload['modulo'], payload['registro_id'], payload['detalles'], prev_str, new_str))
+                        conn.commit()
+                        conn.close()
+                except Exception:
+                    pass
+
+                # Notificar a la interfaz si el admin está viendo el panel
+                try:
+                    if self.window:
+                        self.window.evaluate_js("if(typeof window.recibirNuevoEventoAuditoria === 'function'){ window.recibirNuevoEventoAuditoria(); }")
+                except Exception:
+                    pass
+
+            threading.Thread(target=_bg_guardar, daemon=True).start()
+        except Exception as e:
+            print(f" [Auditoría] Error general en _registrar_auditoria: {e}")
+
+    def registrar_accion_auditoria(self, accion: str, modulo: str, detalles: str, registro_id: str = ""):
+        """Endpoint expuesto a la interfaz web para registrar eventos manuales o de cliente."""
+        self._registrar_auditoria(accion=accion, modulo=modulo, detalles=detalles, registro_id=registro_id)
+        return {"status": "success"}
+
+    def obtener_auditoria(self, limite: int = 500):
+        """
+        Obtiene el listado cronológico de eventos de auditoría (solo accesible para administradores).
+        """
+        if not self._es_admin():
+            return {"status": "error", "mensaje": "Acceso denegado. Solo administradores pueden consultar el registro de auditoría."}
+
+        # Comprobar si la tabla dedicada ya existe en Supabase
+        if not self.auditoria_tabla_disponible:
+            try:
+                supabase.table('auditoria').select('id').limit(1).execute()
+                self.auditoria_tabla_disponible = True
+            except Exception:
+                self.auditoria_tabla_disponible = False
+
+        # 1. Si la tabla nativa 'auditoria' está disponible
+        if self.auditoria_tabla_disponible:
+            try:
+                res = safe_supabase(lambda: supabase.table('auditoria').select('*').order('fecha', desc=True).limit(limite).execute())
+                if res and res.data is not None:
+                    # Auto-migrar cualquier registro pendiente en configuracion (fallback)
+                    try:
+                        res_fb = safe_supabase(lambda: supabase.table('configuracion').select('*').like('clave', 'auditoria_log:%').limit(50).execute())
+                        if res_fb and res_fb.data:
+                            for row in res_fb.data:
+                                try:
+                                    import json
+                                    parsed = json.loads(row.get('valor') or '{}')
+                                    if parsed and isinstance(parsed, dict):
+                                        safe_supabase(lambda: supabase.table('auditoria').insert(parsed).execute())
+                                        safe_supabase(lambda: supabase.table('configuracion').delete().eq('clave', row['clave']).execute())
+                                except Exception:
+                                    pass
+                    except Exception:
+                        pass
+
+                    return {
+                        "status": "success",
+                        "origen": "supabase",
+                        "modo": "supabase_nativo",
+                        "mensaje_modo": "Conectado a tabla dedicada 'auditoria' en Supabase",
+                        "registros": res.data
+                    }
+            except Exception as e_nativo:
+                print(f" [Auditoría] Error consultando tabla nativa: {e_nativo}. Usando fallback...")
+                self.auditoria_tabla_disponible = False
+
+        # 2. Fallback: consultar registros almacenados en tabla configuracion
+        try:
+            import json
+            res_fb = safe_supabase(lambda: supabase.table('configuracion').select('*').like('clave', 'auditoria_log:%').order('clave', desc=True).limit(limite).execute())
+            registros = []
+            if res_fb and res_fb.data:
+                for row in res_fb.data:
+                    try:
+                        p = json.loads(row.get('valor') or '{}')
+                        p['id'] = row.get('clave')
+                        registros.append(p)
+                    except Exception:
+                        pass
+
+            registros.sort(key=lambda x: str(x.get('fecha', '')), reverse=True)
+
+            return {
+                "status": "success",
+                "origen": "supabase_fallback",
+                "modo": "fallback",
+                "mensaje_modo": "Almacenamiento provisional en BD activa. Ejecuta el script SQL en Supabase para habilitar la tabla dedicada.",
+                "registros": registros
+            }
+        except Exception as e_fb:
+            # 3. Fallback a SQLite local si falla Supabase
+            try:
+                import sqlite3
+                db_local = os.path.join(MODELS_DIR, "imei_database.db")
+                if os.path.exists(db_local):
+                    conn = sqlite3.connect(db_local)
+                    conn.row_factory = sqlite3.Row
+                    cur = conn.cursor()
+                    cur.execute("SELECT * FROM auditoria ORDER BY fecha DESC LIMIT ?", (limite,))
+                    filas = [dict(r) for r in cur.fetchall()]
+                    conn.close()
+                    return {
+                        "status": "success",
+                        "origen": "sqlite",
+                        "modo": "sqlite_local",
+                        "mensaje_modo": "Consultado desde SQLite local.",
+                        "registros": filas
+                    }
+            except Exception:
+                pass
+            return {"status": "error", "mensaje": f"Error al consultar auditoría: {str(e_fb)}", "registros": []}
+
+    def obtener_script_sql_auditoria(self):
+        """Retorna el script SQL para crear la tabla 'auditoria' en Supabase."""
+        sql_content = (
+            "-- ====================================================================\n"
+            "-- TABLA DE AUDITORÍA Y REGISTRO DE ACTIVIDADES (IMEI MANAGER PRO v2.0)\n"
+            "-- Ejecutar en el SQL Editor de Supabase\n"
+            "-- ====================================================================\n\n"
+            "CREATE TABLE IF NOT EXISTS public.auditoria (\n"
+            "    id BIGSERIAL PRIMARY KEY,\n"
+            "    fecha TIMESTAMPTZ DEFAULT NOW(),\n"
+            "    usuario TEXT NOT NULL,\n"
+            "    nombre_usuario TEXT,\n"
+            "    rol TEXT DEFAULT 'user',\n"
+            "    accion TEXT NOT NULL,\n"
+            "    modulo TEXT NOT NULL,\n"
+            "    registro_id TEXT DEFAULT '',\n"
+            "    detalles TEXT,\n"
+            "    datos_previos JSONB,\n"
+            "    datos_nuevos JSONB\n"
+            ");\n\n"
+            "CREATE INDEX IF NOT EXISTS idx_auditoria_fecha ON public.auditoria(fecha DESC);\n"
+            "CREATE INDEX IF NOT EXISTS idx_auditoria_usuario ON public.auditoria(usuario);\n"
+            "CREATE INDEX IF NOT EXISTS idx_auditoria_modulo ON public.auditoria(modulo);\n"
+            "CREATE INDEX IF NOT EXISTS idx_auditoria_accion ON public.auditoria(accion);\n\n"
+            "ALTER TABLE public.auditoria DISABLE ROW LEVEL SECURITY;\n"
+        )
+        return {
+            "status": "success",
+            "sql": sql_content,
+            "script": sql_content
+        }
+
+    def exportar_auditoria_excel(self):
+        """Exporta el historial de auditoría a un archivo Excel formateado profesionalmente."""
+        if not self._es_admin():
+            return {"status": "error", "mensaje": "Solo el administrador puede exportar la auditoría."}
+
+        res = self.obtener_auditoria(limite=2000)
+        registros = res.get('registros', [])
+        if not registros:
+            return {"status": "error", "mensaje": "No hay registros de auditoría para exportar."}
+
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            from datetime import datetime
+
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Registro de Auditoria"
+
+            headers = [
+                "Fecha y Hora", "Usuario", "Nombre", "Rol", "Módulo",
+                "Acción", "ID / IMEI Afectado", "Detalles de la Acción"
+            ]
+            ws.append(headers)
+
+            header_fill = PatternFill(start_color="0891B2", end_color="0891B2", fill_type="solid")
+            header_font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
+            border_side = Side(style="thin", color="CBD5E1")
+            cell_border = Border(left=border_side, right=border_side, top=border_side, bottom=border_side)
+
+            for col_num in range(1, len(headers) + 1):
+                cell = ws.cell(row=1, column=col_num)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                cell.border = cell_border
+
+            ws.row_dimensions[1].height = 28
+
+            fill_even = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+            font_row = Font(name="Segoe UI", size=10, color="0F172A")
+
+            for idx, r in enumerate(registros, start=2):
+                fecha_str = str(r.get('fecha') or '').replace('T', ' ')[:19]
+                ws.append([
+                    fecha_str,
+                    str(r.get('usuario') or ''),
+                    str(r.get('nombre_usuario') or ''),
+                    str(r.get('rol') or ''),
+                    str(r.get('modulo') or ''),
+                    str(r.get('accion') or ''),
+                    str(r.get('registro_id') or ''),
+                    str(r.get('detalles') or '')
+                ])
+                ws.row_dimensions[idx].height = 22
+                for col_num in range(1, len(headers) + 1):
+                    cell = ws.cell(row=idx, column=col_num)
+                    cell.font = font_row
+                    cell.border = cell_border
+                    cell.alignment = Alignment(vertical="center")
+                    if idx % 2 == 0:
+                        cell.fill = fill_even
+                    if col_num in [1, 4, 5, 6, 7]:
+                        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+            for col in ws.columns:
+                max_len = max(len(str(cell.value or '')) for cell in col)
+                col_letter = openpyxl.utils.get_column_letter(col[0].column)
+                ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+
+            ws.column_dimensions['A'].width = 22
+            ws.column_dimensions['B'].width = 28
+            ws.column_dimensions['H'].width = 50
+
+            now_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"Auditoria_IMEI_Manager_{now_str}.xlsx"
+            out_dir = self._get_resultados_masivos_dir()
+            out_path = os.path.join(out_dir, filename)
+            wb.save(out_path)
+
+            abrir_archivo(out_path)
+            return {"status": "success", "mensaje": f"Auditoría exportada correctamente: {filename}", "ruta": out_path}
+        except Exception as e:
+            return {"status": "error", "mensaje": f"Error al generar Excel: {str(e)}"}
+
+    def limpiar_auditoria(self, dias: int = 30):
+        """Depura registros de auditoría antiguos."""
+        if not self._es_admin():
+            return {"status": "error", "mensaje": "Solo el administrador puede depurar la auditoría."}
+        try:
+            from datetime import datetime, timedelta, timezone
+            limite_fecha = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+            try:
+                safe_supabase(lambda: supabase.table('auditoria').delete().lt('fecha', limite_fecha).execute())
+            except Exception:
+                pass
+            return {"status": "success", "mensaje": f"Registros con más de {dias} días depurados correctamente."}
+        except Exception as e:
+            return {"status": "error", "mensaje": str(e)}
 
     # ── SEGURIDAD ──────────────────────────────────────────────────
 
@@ -1011,6 +1377,7 @@ class Api:
                         }
                         if res.session:
                             _store_session(res.session.access_token, res.session.refresh_token)
+                        self._registrar_auditoria("LOGIN", "Seguridad", f"Inicio de sesión exitoso ({self.current_user['usuario']})", usuario=self.current_user['usuario'], nombre_usuario=self.current_user['nombre'], rol=self.current_user['rol'])
                         return {
                             "status": "success",
                             "user": self.current_user,
@@ -1052,6 +1419,7 @@ class Api:
                         "refresh_token": None
                     }
                     print(f" [API] Autenticación exitosa en tabla usuarios para: {usuario} (Rol: {rol})")
+                    self._registrar_auditoria("LOGIN", "Seguridad", f"Inicio de sesión exitoso ({self.current_user['usuario']})", usuario=self.current_user['usuario'], nombre_usuario=self.current_user['nombre'], rol=self.current_user['rol'])
                     return {
                         "status": "success",
                         "user": self.current_user,
@@ -1076,6 +1444,7 @@ class Api:
                         }
                         if res.session:
                             _store_session(res.session.access_token, res.session.refresh_token)
+                        self._registrar_auditoria("LOGIN", "Seguridad", f"Inicio de sesión exitoso ({self.current_user['usuario']})", usuario=self.current_user['usuario'], nombre_usuario=self.current_user['nombre'], rol=self.current_user['rol'])
                         return {
                             "status": "success",
                             "user": self.current_user,
@@ -1153,6 +1522,7 @@ class Api:
             # Guardar tokens globalmente para restaurar sesión en caso de Broken Pipe
             if res.session:
                 _store_session(res.session.access_token, res.session.refresh_token)
+            self._registrar_auditoria("LOGIN", "Seguridad", f"Sesión restaurada con token ({self.current_user['usuario']})", usuario=self.current_user['usuario'], nombre_usuario=self.current_user['nombre'], rol=self.current_user['rol'])
             return {
                 "status": "success",
                 "user": self.current_user,
@@ -1328,6 +1698,7 @@ class Api:
                 self.current_user["nombre"] = nombre
                 if avatar_data_url:
                     self.current_user["avatar_url"] = avatar_data_url
+                self._registrar_auditoria("MODIFICAR_PERFIL", "Seguridad", f"Perfil actualizado para {self.current_user.get('usuario')}: Nombre='{nombre}'")
 
             return {
                 "status": "success",
@@ -1400,6 +1771,8 @@ class Api:
 
     def logout_usuario(self):
         try:
+            if self.current_user:
+                self._registrar_auditoria("LOGOUT", "Seguridad", f"Cierre de sesión de {self.current_user.get('usuario')}")
             supabase.auth.sign_out()
         except:
             pass
@@ -1453,6 +1826,7 @@ class Api:
                 supabase.table('configuracion').insert({'clave': 'db_maintenance_until', 'valor': until_val}).execute()
 
             etiqueta = 'ACTIVA' if nuevo_estado == 'active' else 'EN MANTENIMIENTO'
+            self._registrar_auditoria("ESTADO_BD", "Sistema", f"Base de datos cambiada a estado: {etiqueta}" + (f" (Mantenimiento hasta: {until_val})" if until_val else ""))
             return {
                 "status": "success",
                 "db_status": nuevo_estado,
@@ -1636,7 +2010,8 @@ class Api:
 
                 ss_path = resultado.get("screenshot_path")
                 if ss_path and os.path.exists(ss_path):
-                    abrir_archivo(ss_path)
+                    if not (isinstance(opciones_pantallazo, dict) and opciones_pantallazo.get('no_abrir_auto')):
+                        abrir_archivo(ss_path)
 
                 if async_run and self.window:
                     msg = resultado.get('mensaje', '').replace("'", "\\'")
@@ -1781,7 +2156,8 @@ class Api:
 
                 ss_path = resultado.get("screenshot_path")
                 if ss_path and os.path.exists(ss_path):
-                    abrir_archivo(ss_path)
+                    if not (isinstance(opciones_pantallazo, dict) and opciones_pantallazo.get('no_abrir_auto')):
+                        abrir_archivo(ss_path)
 
                 if async_run and self.window:
                     msg = resultado.get('mensaje', '').replace("'", "\\'")
@@ -1845,6 +2221,7 @@ class Api:
                 'foto_cc': datos.get('foto_cc', cc_existente)
             }
             safe_supabase(lambda: supabase.table('encargados').upsert(data).execute())
+            self._registrar_auditoria("GUARDAR_ENCARGADO", "Encargados", f"Encargado guardado/actualizado: {datos.get('nombre')} (CC: {datos.get('identificacion')})", registro_id=datos.get('nombre'))
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
@@ -1852,6 +2229,7 @@ class Api:
     def eliminar_encargado(self, nombre):
         try:
             safe_supabase(lambda: supabase.table('encargados').delete().eq('nombre', nombre).execute())
+            self._registrar_auditoria("ELIMINAR_ENCARGADO", "Encargados", f"Encargado eliminado: {nombre}", registro_id=nombre)
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
@@ -1861,6 +2239,7 @@ class Api:
     def guardar_pin(self, imei, pin):
         try:
             safe_supabase(lambda: supabase.table('registros').update({'pin_desbloqueo': pin}).eq('imei', imei).execute())
+            self._registrar_auditoria("PIN_DESBLOQUEO", "Registros", f"PIN de desbloqueo asignado al IMEI {imei}: {pin}", registro_id=imei)
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
@@ -2368,6 +2747,7 @@ class Api:
                 'pago': datos['pago']
             }
             supabase.table('registros').insert(data).execute()
+            self._registrar_auditoria("CREAR", "Registros", f"Nuevo equipo registrado - IMEI: {datos['imei']} (Modelo: {datos.get('modelo')}, Operador: {datos.get('operador')}, Cliente: {datos.get('cliente')})", registro_id=datos['imei'], datos_nuevos=data)
             print("[OK] [API] Registro guardado con éxito.")
             return {"status": "success"}
         except Exception as e:
@@ -2392,10 +2772,9 @@ class Api:
         try:
             old_reg = None
             try:
-                if campo in ["reg_wom", "reg_etb", "razon", "estado", "operador"]:
-                    old_res = supabase.table('registros').select('*').eq('imei', imei).execute()
-                    if old_res.data:
-                        old_reg = old_res.data[0]
+                old_res = supabase.table('registros').select('*').eq('imei', imei).execute()
+                if old_res.data:
+                    old_reg = old_res.data[0]
             except Exception as he:
                 print(f"[WARN] [Hook] Error fetching old record: {he}")
 
@@ -2422,6 +2801,14 @@ class Api:
                         self._crear_notificacion_si_cambia_a_exitoso(imei, old_reg, new_reg)
             except Exception as he:
                 print(f"[WARN] [Hook] Error executing notification check: {he}")
+
+            old_val = (old_reg.get(campo) if old_reg else "") or ""
+            desc = f"IMEI {imei}: Campo '{campo}' modificado"
+            if old_val:
+                desc += f" de '{old_val}' a '{valor}'"
+            else:
+                desc += f" a '{valor}'"
+            self._registrar_auditoria("MODIFICAR", "Registros", desc, registro_id=imei, datos_previos={campo: old_val}, datos_nuevos={campo: valor})
 
             return {"status": "success"}
         except Exception as e:
@@ -2596,12 +2983,19 @@ class Api:
             if not headless:
                 cmd.append("--visible")
 
-            proc, stdout, _ = run_subprocess_safe(cmd, timeout=60)
+            proc, stdout, _ = run_subprocess_safe(cmd, timeout=90)
 
             for line in reversed(stdout.splitlines()):
                 line = line.strip()
                 if line.startswith("{"):
                     data = _json.loads(line)
+                    if data.get("status") == "pagina_alterada":
+                        pagina = data.get("pagina", "iUnlocker")
+                        detalle = data.get("detalle", "Estructura alterada")
+                        if self.window:
+                            try:
+                                self.window.evaluate_js(f"window.mostrarModalPaginaAlterada({_json.dumps(pagina)}, {_json.dumps(detalle)})")
+                            except Exception: pass
                     return data
 
             return {"status": "error", "mensaje": "Sin respuesta válida del script."}
@@ -2626,6 +3020,14 @@ class Api:
                 line = line.strip()
                 if line.startswith("{"):
                     data = _json.loads(line)
+                    if data.get("status") == "pagina_alterada":
+                        pagina = data.get("pagina", "Movical")
+                        detalle = data.get("detalle", "Estructura alterada")
+                        if self.window:
+                            try:
+                                self.window.evaluate_js(f"window.mostrarModalPaginaAlterada({_json.dumps(pagina)}, {_json.dumps(detalle)})")
+                            except Exception: pass
+                        return data
                     modelo = data.get("modelo", "")
                     screenshot_path = data.get("pantallazo", "")
                     if modelo == "Error" or not modelo:
@@ -2746,8 +3148,25 @@ class Api:
         """
         try:
             scraper = ScraperEstado(headless=headless)
-            estado, operador = scraper.consultar(imei)
+            res = scraper.consultar(imei)
             scraper.close()
+
+            if isinstance(res, tuple) and res[0] == "Pagina Alterada":
+                pagina = res[1] if len(res) > 1 else "IMEI Colombia"
+                detalle = res[2] if len(res) > 2 else "Estructura alterada"
+                if self.window:
+                    try:
+                        import json as _json
+                        self.window.evaluate_js(f"window.mostrarModalPaginaAlterada({_json.dumps(pagina)}, {_json.dumps(detalle)})")
+                    except Exception: pass
+                return {
+                    "status": "pagina_alterada",
+                    "pagina": pagina,
+                    "mensaje": f"El estado de la página {pagina} ha cambiado, por favor solicite soporte a Martin.",
+                    "detalle": detalle
+                }
+
+            estado, operador = res
             return {
                 "status": "success",
                 "estado": estado,
@@ -2768,23 +3187,94 @@ class Api:
             os.makedirs(temp_dir, exist_ok=True)
             ruta = os.path.join(temp_dir, f"{imei}_colombia.png")
 
-            # Estado/operador
+            # Estado/operador + Pantallazo directo en una sola consulta
             scraper_est = ScraperEstado(headless=headless)
-            estado, operador = scraper_est.consultar(imei)
+            res = scraper_est.consultar(imei, ruta_screenshot=ruta)
             scraper_est.close()
 
-            # Pantallazo
-            scraper_pan = ScraperPantallazo(headless=headless)
-            scraper_pan.consultar_y_capturar(imei, ruta)
-            scraper_pan.close()
+            if isinstance(res, tuple) and res[0] == "Pagina Alterada":
+                pagina = res[1] if len(res) > 1 else "IMEI Colombia"
+                detalle = res[2] if len(res) > 2 else "Estructura alterada"
+                if self.window:
+                    try:
+                        import json as _json
+                        self.window.evaluate_js(f"window.mostrarModalPaginaAlterada({_json.dumps(pagina)}, {_json.dumps(detalle)})")
+                    except Exception: pass
+                return {
+                    "status": "pagina_alterada",
+                    "pagina": pagina,
+                    "mensaje": f"El estado de la página {pagina} ha cambiado, por favor solicite soporte a Martin.",
+                    "detalle": detalle
+                }
+
+            estado, operador = res
+
+            # Respaldo si no se guardó la captura
+            if not os.path.exists(ruta):
+                try:
+                    scraper_pan = ScraperPantallazo(headless=headless)
+                    scraper_pan.consultar_y_capturar(imei, ruta)
+                    scraper_pan.close()
+                except Exception:
+                    pass
 
             screenshot_path = ruta if os.path.exists(ruta) else None
+            if screenshot_path:
+                try:
+                    from EstilizadorPantallazo import crear_pantallazo_profesional
+                    datos_estilo = {
+                        "imei": imei,
+                        "estado": estado,
+                        "operador": operador,
+                        "modelo": "",
+                    }
+                    crear_pantallazo_profesional(screenshot_path, datos_estilo, screenshot_path)
+                except Exception as est_err:
+                    print(f"[WARN] Error al estilizar captura Check: {est_err}")
+
             return {
                 "status": "success",
                 "estado": estado,
                 "operador": operador,
                 "screenshot_path": screenshot_path
             }
+        except Exception as e:
+            return {"status": "error", "mensaje": str(e)}
+
+    # ── MÉTODOS DE SEGURIDAD / NOTIFICACIÓN PÁGINA ALTERADA ──────
+
+    def obtener_config_app_password_imp(self):
+        """Obtiene la contraseña de aplicación de Gmail configurada para imeimanagerpro@gmail.com."""
+        try:
+            from NotificadorAlteracion import obtener_app_password_imp
+            pwd = obtener_app_password_imp(supabase)
+            return {
+                "status": "success",
+                "configurada": bool(pwd),
+                "valor": pwd if pwd else ""
+            }
+        except Exception as e:
+            return {"status": "error", "mensaje": str(e)}
+
+    def guardar_config_app_password_imp(self, app_password: str):
+        """Persiste la contraseña de aplicación de Gmail en la base de datos."""
+        try:
+            from NotificadorAlteracion import guardar_app_password_imp
+            return guardar_app_password_imp(app_password, supabase)
+        except Exception as e:
+            return {"status": "error", "mensaje": str(e)}
+
+    def notificar_pagina_alterada(self, pagina: str, detalle: str, remitente_nombre: str = "", app_password: str = None):
+        """Envía el correo de alerta de página alterada a Martin desde imeimanagerpro@gmail.com."""
+        try:
+            from NotificadorAlteracion import enviar_correo_alteracion
+            return enviar_correo_alteracion(
+                pagina=pagina,
+                detalle=detalle,
+                nombre_remitente=remitente_nombre,
+                app_password=app_password,
+                supabase_client=supabase
+            )
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
 
@@ -2834,21 +3324,10 @@ class Api:
 
     def consultar_modelo_solo(self, imei):
         """
-        Consulta modelo de un único IMEI (sincrónico).
-        Migrado a ConsultarModeloPro.py (sin screenshot).
+        Consulta modelo de un único IMEI con Movical (estándar, rápido e ilimitado).
+        Usado en Nuevo Registro y formularios individuales.
         """
-        res = self.consultar_modelo_pro(imei, con_pantallazo=False)
-        if res.get("status") == "success" and res.get("modelo"):
-            return {
-                "status": "success",
-                "modelo": res["modelo"],
-                "consultas_restantes": res.get("consultas_restantes", 0)
-            }
-        return {
-            "status": "error",
-            "mensaje": res.get("mensaje", "Modelo no encontrado"),
-            "consultas_restantes": res.get("consultas_restantes", 0)
-        }
+        return self.consultar_modelo_estandar(imei, headless=True)
     def consultar_modelo(self, imei, headless: bool = True):
         try:
             import json as _json
@@ -2862,6 +3341,14 @@ class Api:
             for line in reversed(stdout.splitlines()):
                 if line.strip().startswith('{'):
                     data = _json.loads(line)
+                    if data.get("status") == "pagina_alterada":
+                        pagina = data.get("pagina", "Movical")
+                        detalle = data.get("detalle", "Estructura alterada")
+                        if self.window:
+                            try:
+                                self.window.evaluate_js(f"window.mostrarModalPaginaAlterada({_json.dumps(pagina)}, {_json.dumps(detalle)})")
+                            except Exception: pass
+                        return data
                     if data.get("status") == "error":
                         return {"status": "error", "mensaje": data.get("mensaje", "Modelo no encontrado.")}
                     modelo = (data.get("modelo") or "").strip()
@@ -2919,7 +3406,7 @@ class Api:
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
 
-    def generar_declaracion_general(self, imei: str) -> dict:
+    def generar_declaracion_general(self, imei: str, operador: str = None) -> dict:
         try:
             res = supabase.table('registros').select('*').eq('imei', imei).execute()
             if not res.data:
@@ -2930,13 +3417,14 @@ class Api:
             if not enc:
                 return {"status": "error", "mensaje": "Sin encargado asignado."}
                 
+            op_final = (operador or reg.get('operador', '')).strip()
             datos = {
                 'nombre': enc.get('nombre', ''),
                 'tipo_doc': 'C.C.',
                 'num_doc': enc.get('identificacion', ''),
                 'lugar_exp': enc.get('lugar_expedicion', ''),
                 'linea_usuario': enc.get('lineas_etb', '').split(',')[0].strip() if enc.get('lineas_etb') else '',
-                'operador': reg.get('operador', ''),
+                'operador': op_final,
                 'modelo': reg.get('modelo', ''),
                 'imei': imei
             }
@@ -2952,12 +3440,214 @@ class Api:
                         if res_pdf.get("status") == "success":
                             output = res_pdf.get("ruta")
                             abrir_archivo(output)
-                            return {"status": "success", "ruta": output, "mensaje": "Declaración general generada en Descargas."}
+                            return {"status": "success", "ruta": output, "mensaje": f"Declaración general ({op_final}) generada en Descargas."}
                         else:
                             return {"status": "error", "mensaje": res_pdf.get("mensaje", "Error al generar")}
                     except Exception:
                         pass
             return {"status": "error", "mensaje": "No se pudo generar la declaración en PDF."}
+        except Exception as e:
+            return {"status": "error", "mensaje": str(e)}
+
+    def generar_declaracion_no_oficial(self, imei: str, operador: str, estado: str) -> dict:
+        try:
+            reg = {}
+            try:
+                res = supabase.table('registros').select('*').eq('imei', imei).execute()
+                if res.data:
+                    reg = res.data[0]
+            except Exception:
+                pass
+            
+            enc = self.obtener_encargado(reg.get('encargado', '')) if reg.get('encargado') else None
+            
+            datos = {
+                'tipo_declaracion': 'no_oficial',
+                'estado_red': estado,
+                'nombre': enc.get('nombre', 'Propietario no registrado') if enc else 'Propietario no registrado',
+                'tipo_doc': 'C.C.',
+                'num_doc': enc.get('identificacion', '') if enc else '',
+                'lugar_exp': enc.get('lugar_expedicion', '') if enc else '',
+                'linea_usuario': reg.get('linea', '') or (enc.get('lineas_etb', '').split(',')[0].strip() if enc and enc.get('lineas_etb') else ''),
+                'operador': operador.strip(),
+                'modelo': reg.get('modelo', ''),
+                'imei': imei
+            }
+            
+            import json, subprocess, sys, os
+            args_pdf = script_command("GeneradorPDF.py") + [json.dumps(datos)]
+            proc_pdf, stdout_pdf, _ = run_subprocess_safe(args_pdf, timeout=60)
+            
+            for linea_pdf in reversed(stdout_pdf.strip().split('\n')):
+                if linea_pdf.strip().startswith('{'):
+                    try:
+                        res_pdf = json.loads(linea_pdf.strip())
+                        if res_pdf.get("status") == "success":
+                            output = res_pdf.get("ruta")
+                            abrir_archivo(output)
+                            self._registrar_auditoria("CREAR", "Registros", f"Constancia no oficial {operador} ({estado}) generada en PDF", registro_id=imei)
+                            return {"status": "success", "ruta": output, "mensaje": f"Declaración no oficial {operador} ({estado}) generada."}
+                        else:
+                            return {"status": "error", "mensaje": res_pdf.get("mensaje", "Error al generar")}
+                    except Exception:
+                        pass
+            return {"status": "error", "mensaje": "No se pudo generar la declaración no oficial en PDF."}
+        except Exception as e:
+            return {"status": "error", "mensaje": str(e)}
+
+    def copiar_imagen_portapapeles(self, data_url_or_base64: str, imei: str = "", operador: str = "", estado: str = "") -> dict:
+        """Copia una imagen PNG directamente al portapapeles de macOS (NSPasteboard) para pegar con Cmd+V."""
+        try:
+            import base64
+            from AppKit import NSPasteboard, NSPasteboardTypePNG, NSData
+            if os.path.exists(data_url_or_base64):
+                with open(data_url_or_base64, 'rb') as f:
+                    raw = f.read()
+            elif ',' in data_url_or_base64:
+                b64 = data_url_or_base64.split(',', 1)[1]
+                raw = base64.b64decode(b64)
+            else:
+                raw = base64.b64decode(data_url_or_base64)
+            pb = NSPasteboard.generalPasteboard()
+            pb.clearContents()
+            ns_data = NSData.dataWithBytes_length_(raw, len(raw))
+            res = pb.setData_forType_(ns_data, NSPasteboardTypePNG)
+            if res:
+                if imei:
+                    self._registrar_auditoria("CREAR", "Registros", f"Constancia copiada al portapapeles ({operador} - {estado})", registro_id=imei)
+                return {"status": "success", "mensaje": "Imagen copiada al portapapeles de tu Mac."}
+            else:
+                return {"status": "error", "mensaje": "No se pudo asignar al portapapeles."}
+        except Exception as e:
+            return {"status": "error", "mensaje": str(e)}
+
+    def guardar_imagen_declaracion(self, data_url_or_base64: str, nombre_sugerido: str = "", imei: str = "", operador: str = "", estado: str = "") -> dict:
+        """Guarda la imagen PNG de la constancia en la carpeta Descargas y la abre."""
+        try:
+            import base64, shutil
+            out_dir = os.path.join(os.path.expanduser('~'), 'Downloads')
+            os.makedirs(out_dir, exist_ok=True)
+            if not nombre_sugerido:
+                from datetime import datetime
+                nombre_sugerido = f"Constancia_{operador or 'Operador'}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+            if not nombre_sugerido.lower().endswith('.png'):
+                nombre_sugerido += '.png'
+            ruta = os.path.join(out_dir, nombre_sugerido)
+            if os.path.exists(data_url_or_base64):
+                if os.path.abspath(data_url_or_base64) != os.path.abspath(ruta):
+                    shutil.copy2(data_url_or_base64, ruta)
+            else:
+                if ',' in data_url_or_base64:
+                    b64 = data_url_or_base64.split(',', 1)[1]
+                else:
+                    b64 = data_url_or_base64
+                raw = base64.b64decode(b64)
+                with open(ruta, 'wb') as f:
+                    f.write(raw)
+            abrir_archivo(ruta)
+            if imei:
+                self._registrar_auditoria("CREAR", "Registros", f"Constancia guardada en PNG ({operador} - {estado})", registro_id=imei)
+            return {"status": "success", "mensaje": f"Imagen guardada en Descargas: {nombre_sugerido}", "ruta": ruta}
+        except Exception as e:
+            return {"status": "error", "mensaje": str(e)}
+
+    def compartir_archivos(self, rutas) -> dict:
+        """Abre el selector nativo de compartir (macOS NSSharingServicePicker) con uno o múltiples archivos."""
+        try:
+            import os, sys
+            if isinstance(rutas, str):
+                rutas = [rutas]
+            rutas_validas = [os.path.abspath(r) for r in rutas if r and os.path.exists(r)]
+            if not rutas_validas:
+                return {"status": "error", "mensaje": "No se encontraron archivos válidos para compartir"}
+            
+            if sys.platform == "darwin":
+                import AppKit
+                from Foundation import NSURL
+                urls = [NSURL.fileURLWithPath_(p) for p in rutas_validas]
+                
+                def _show_picker():
+                    try:
+                        picker = AppKit.NSSharingServicePicker.alloc().initWithItems_(urls)
+                        key_win = AppKit.NSApplication.sharedApplication().keyWindow()
+                        if key_win:
+                            view = key_win.contentView()
+                            rect = view.bounds()
+                            picker.showRelativeToRect_ofView_preferredEdge_(rect, view, AppKit.NSMinYEdge)
+                        else:
+                            import subprocess
+                            subprocess.run(['open', '-R', rutas_validas[0]])
+                    except Exception as pe:
+                        print(f"Error mostrando selector de compartir: {pe}")
+                
+                AppKit.NSOperationQueue.mainQueue().addOperationWithBlock_(_show_picker)
+                return {"status": "success", "mensaje": "Menú de compartir abierto"}
+            else:
+                import subprocess
+                subprocess.run(f'explorer /select,"{rutas_validas[0]}"', shell=True)
+                return {"status": "success", "mensaje": "Archivos abiertos en el explorador"}
+        except Exception as e:
+            return {"status": "error", "mensaje": str(e)}
+
+    def descargar_multiples_archivos(self, rutas, nombre_carpeta: str = "Comprobantes_Masivos") -> dict:
+        """Guarda múltiples archivos en una subcarpeta de Descargas y la abre."""
+        try:
+            import os, shutil
+            from datetime import datetime
+            rutas_validas = [r for r in rutas if r and os.path.exists(r)]
+            if not rutas_validas:
+                return {"status": "error", "mensaje": "No hay archivos para descargar"}
+            
+            down_dir = os.path.join(os.path.expanduser('~'), 'Downloads')
+            dest_folder = os.path.join(down_dir, f"{nombre_carpeta}_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+            os.makedirs(dest_folder, exist_ok=True)
+            
+            copiados = 0
+            for r in rutas_validas:
+                dest_file = os.path.join(dest_folder, os.path.basename(r))
+                if os.path.abspath(r) != os.path.abspath(dest_file):
+                    shutil.copy2(r, dest_file)
+                copiados += 1
+                
+            abrir_archivo(dest_folder)
+            return {"status": "success", "mensaje": f"{copiados} archivo(s) guardado(s) en Descargas", "carpeta": dest_folder}
+        except Exception as e:
+            return {"status": "error", "mensaje": str(e)}
+
+    def obtener_imagen_base64(self, ruta: str) -> dict:
+        """Lee una imagen local o página 1 de PDF y devuelve su Data URL en base64 para preview web."""
+        try:
+            import os, base64
+            if not ruta or not os.path.exists(ruta):
+                return {"status": "error", "mensaje": "Archivo no encontrado"}
+            
+            ext = os.path.splitext(ruta)[1].lower().replace('.', '')
+            if ext == 'pdf':
+                try:
+                    import pypdfium2 as pdfium, io
+                    with open(ruta, "rb") as f:
+                        pdf = pdfium.PdfDocument(f.read())
+                    page = pdf.get_page(0)
+                    pil_img = page.render(scale=2).to_pil()
+                    buf = io.BytesIO()
+                    pil_img.save(buf, format="PNG")
+                    raw = buf.getvalue()
+                    mime = 'image/png'
+                except Exception as pe:
+                    print(f"Error renderizando PDF: {pe}")
+                    with open(ruta, "rb") as f:
+                        raw = f.read()
+                    mime = 'application/pdf'
+            else:
+                with open(ruta, "rb") as f:
+                    raw = f.read()
+                if ext in ['jpg', 'jpeg']: mime = 'image/jpeg'
+                elif ext == 'png': mime = 'image/png'
+                elif ext == 'webp': mime = 'image/webp'
+                else: mime = 'image/png'
+            
+            b64 = base64.b64encode(raw).decode('utf-8')
+            return {"status": "success", "data_url": f"data:{mime};base64,{b64}", "ruta": ruta}
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
 
@@ -3019,6 +3709,7 @@ class Api:
                         encargados_insertados += 1
                     except Exception:
                         pass
+            self._registrar_auditoria("IMPORTAR", "Registros", f"Importación masiva desde Excel: {registros_insertados} equipos y {encargados_insertados} encargados")
             return {"status": "success", "mensaje": f"Cargados: {registros_insertados} equipos y {encargados_insertados} encargados."}
         except Exception as e:
             return {"status": "error", "mensaje": f"Error interno al cargar: {str(e)}"}
@@ -3545,8 +4236,25 @@ end tell
     def actualizar_imei(self, imei, headless: bool = False):
         try:
             scraper = ScraperEstado(headless=headless)
-            estado, operador = scraper.consultar(imei)
+            res = scraper.consultar(imei)
             scraper.close()
+
+            if isinstance(res, tuple) and res[0] == "Pagina Alterada":
+                pagina = res[1] if len(res) > 1 else "IMEI Colombia"
+                detalle = res[2] if len(res) > 2 else "Estructura alterada"
+                if self.window:
+                    try:
+                        import json as _json
+                        self.window.evaluate_js(f"window.mostrarModalPaginaAlterada({_json.dumps(pagina)}, {_json.dumps(detalle)})")
+                    except Exception: pass
+                return {
+                    "status": "pagina_alterada",
+                    "pagina": pagina,
+                    "mensaje": f"El estado de la página {pagina} ha cambiado, por favor solicite soporte a Martin.",
+                    "detalle": detalle
+                }
+
+            estado, operador = res
 
             old_reg = None
             try:
@@ -3596,41 +4304,26 @@ end tell
         try:
             home_dir = os.path.expanduser("~")
             app_dir  = os.path.join(home_dir, "IMEIManagerData")
+            os.makedirs(app_dir, exist_ok=True)
             ruta     = os.path.join(app_dir, f"{imei}.png")
             scraper  = ScraperPantallazo(headless=headless)
             scraper.consultar_y_capturar(imei, ruta)
             scraper.close()
             
             if os.path.exists(ruta):
-                from PIL import Image, ImageDraw, ImageFont
-                img = Image.open(ruta)
-                width, height = img.size
-                
-                text_height = 140
-                new_img = Image.new("RGB", (width, height + text_height), "#1a1b26")
-                new_img.paste(img, (0, 0))
-                
-                draw = ImageDraw.Draw(new_img)
-                font_large, font_normal = _load_system_font(36, 28)
-                
-                info = info or {}
-                modelo = info.get("modelo", "N/A") or "N/A"
-                estado = info.get("estado", "N/A") or "N/A"
-                operador = info.get("operador", "") or ""
-                
-                # Layout de datos inferior
-                draw.text((40, height + 25), f"IMEI: {imei}", font=font_large, fill="#7aa2f7")
-                draw.text((40, height + 80), f"Modelo: {modelo}", font=font_normal, fill="#a9b1d6")
-                
-                estado_color = "#f7768e"
-                if str(estado).lower() in ["limpio", "disponible", "sin reporte", "libre"]:
-                    estado_color = "#9ece6a"
-                
-                draw.text((width // 2, height + 25), f"Estado: {estado}", font=font_large, fill=estado_color)
-                if operador:
-                    draw.text((width // 2, height + 80), f"Operador: {operador}", font=font_normal, fill="#bb9af7")
-                
-                new_img.save(ruta)
+                try:
+                    from EstilizadorPantallazo import crear_pantallazo_profesional
+                    datos_estilo = {
+                        "imei": imei,
+                        "modelo": (info or {}).get("modelo", ""),
+                        "estado": (info or {}).get("estado", ""),
+                        "operador": (info or {}).get("operador", ""),
+                        "cliente": (info or {}).get("cliente", "") or (info or {}).get("propietario", ""),
+                        "fecha": (info or {}).get("fecha", "")
+                    }
+                    crear_pantallazo_profesional(ruta, datos_estilo, ruta)
+                except Exception as est_err:
+                    print(f"[WARN] Error al estilizar pantallazo profesional: {est_err}")
 
             if not _copiar_imagen_portapapeles(ruta):
                 return {"status": "error", "mensaje": "No se pudo copiar la imagen al portapapeles en este sistema."}
@@ -3686,6 +4379,7 @@ end tell
             }
             supabase.table('papelera').upsert(papelera_data).execute()
             supabase.table('registros').delete().eq('imei', imei).execute()
+            self._registrar_auditoria("ELIMINAR", "Registros", f"Equipo IMEI {imei} movido a papelera (Modelo: {registro.get('modelo')}, Cliente: {registro.get('cliente')})", registro_id=imei, datos_previos=papelera_data)
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
@@ -3715,33 +4409,7 @@ end tell
             }
             supabase.table('registros').upsert(registro_data).execute()
             supabase.table('papelera').delete().eq('imei', imei).execute()
-            return {"status": "success"}
-        except Exception as e:
-            return {"status": "error", "mensaje": str(e)}
-        try:
-            res = supabase.table('papelera').select('*').eq('imei', imei).execute()
-            if not res.data:
-                return {"status": "error", "mensaje": "Registro no encontrado en papelera."}
-            papelera_item = res.data[0]
-            registro_data = {
-                'imei':                    papelera_item['imei'],
-                'modelo':                  papelera_item.get('modelo', ''),
-                'estado':                  papelera_item.get('estado', ''),
-                'operador':                papelera_item.get('operador', ''),
-                'cliente':                 papelera_item.get('cliente', ''),
-                'razon':                   papelera_item.get('razon', ''),
-                'encargado':               papelera_item.get('encargado', ''),
-                'pago':                    papelera_item.get('pago', ''),
-                'pin_desbloqueo':          papelera_item.get('pin_desbloqueo', ''),
-                'reg_wom':                 papelera_item.get('reg_wom', 'No'),
-                'reg_etb':                 papelera_item.get('reg_etb', 'No'),
-                'foto_dispositivo':        papelera_item.get('foto_dispositivo', ''),
-                'ruta_declaracion_generada': papelera_item.get('ruta_declaracion_generada', ''),
-                'fecha_declaracion_generada': papelera_item.get('fecha_declaracion_generada', ''),
-                'linea':                   papelera_item.get('linea', '')
-            }
-            supabase.table('registros').upsert(registro_data).execute()
-            supabase.table('papelera').delete().eq('imei', imei).execute()
+            self._registrar_auditoria("RESTAURAR", "Registros", f"Equipo IMEI {imei} restaurado desde papelera a registros activos", registro_id=imei, datos_nuevos=registro_data)
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
@@ -3749,6 +4417,7 @@ end tell
     def borrar_permanente(self, imei):
         try:
             supabase.table('papelera').delete().eq('imei', imei).execute()
+            self._registrar_auditoria("ELIMINAR_DEFINITIVO", "Papelera", f"Equipo IMEI {imei} eliminado definitivamente de la papelera", registro_id=imei)
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
@@ -3756,9 +4425,12 @@ end tell
     def vaciar_papelera(self):
         try:
             res = supabase.table('papelera').select('imei').execute()
+            total_borrados = 0
             if res.data:
+                total_borrados = len(res.data)
                 for item in res.data:
                     supabase.table('papelera').delete().eq('imei', item['imei']).execute()
+            self._registrar_auditoria("VACIAR_PAPELERA", "Papelera", f"Papelera vaciada por completo ({total_borrados} registros eliminados)")
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
@@ -3794,6 +4466,15 @@ end tell
 
             if not data:
                 return {"status": "error", "mensaje": "Sin respuesta válida del script blacklist."}
+
+            if data.get("status") == "pagina_alterada":
+                pagina = data.get("pagina", "iUnlocker Blacklist")
+                detalle = data.get("detalle", "Estructura alterada")
+                if self.window:
+                    try:
+                        self.window.evaluate_js(f"window.mostrarModalPaginaAlterada({_json.dumps(pagina)}, {_json.dumps(detalle)})")
+                    except Exception: pass
+                return data
 
             if data.get("status") == "success":
                 valor_bd = data.get("valor_bd", "clean")  # "Blacklist" o "clean"
@@ -4086,6 +4767,7 @@ end tell
             if 'oculto' in datos and self._es_admin():
                 data['oculto'] = bool(datos['oculto'])
             supabase.table('clientes').upsert(data).execute()
+            self._registrar_auditoria("GUARDAR_CLIENTE", "Clientes", f"Cliente guardado/actualizado: {datos.get('nombre')} (ID: {datos.get('id')})", registro_id=datos.get('id'), datos_nuevos=data)
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
@@ -4166,6 +4848,7 @@ end tell
         try:
             id_str = str(id_cliente).strip()
             supabase.table('clientes').update({'oculto': bool(oculto)}).eq('id', id_str).execute()
+            self._registrar_auditoria("MODIFICAR_CLIENTE", "Clientes", f"Cliente {id_str} marcado como {'Oculto' if oculto else 'Público'}", registro_id=id_str)
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
@@ -4187,6 +4870,7 @@ end tell
                 'oculto':     True
             }
             supabase.table('clientes').update(data).eq('id', id_str).execute()
+            self._registrar_auditoria("MODIFICAR_CLIENTE", "Clientes", f"Cliente oculto {id_str} actualizado: {datos.get('nombre')}", registro_id=id_str, datos_nuevos=data)
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
@@ -4197,6 +4881,7 @@ end tell
             return {"status": "error", "mensaje": "Acceso denegado. Solo el administrador."}
         try:
             supabase.table('clientes').delete().eq('id', str(id_cliente).strip()).execute()
+            self._registrar_auditoria("ELIMINAR_CLIENTE", "Clientes", f"Cliente oculto ID {id_cliente} eliminado definitivamente", registro_id=str(id_cliente))
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
@@ -4216,6 +4901,7 @@ end tell
                 'oculto':     True
             }
             supabase.table('clientes').upsert(data).execute()
+            self._registrar_auditoria("CREAR_CLIENTE_OCULTO", "Clientes", f"Cliente oculto creado: {datos.get('nombre')} (ID: {datos.get('id')})", registro_id=datos.get('id'), datos_nuevos=data)
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
@@ -4247,6 +4933,7 @@ end tell
                 "encargado":     datos.get('encargado', '')
             }
             safe_supabase(lambda: supabase.table('lineas').upsert(data).execute())
+            self._registrar_auditoria("GUARDAR_LINEA", "Líneas", f"Línea {data['numero']} ({data['operador']}) guardada/actualizada. Estado: {data['estado']}, Encargado: {data['encargado']}", registro_id=data['numero'], datos_nuevos=data)
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
@@ -4259,6 +4946,7 @@ end tell
             if num_str in hidden:
                 hidden.remove(num_str)
                 self._save_hidden_lines(hidden)
+            self._registrar_auditoria("ELIMINAR_LINEA", "Líneas", f"Línea {num_str} eliminada", registro_id=num_str)
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
@@ -4300,6 +4988,7 @@ end tell
             except Exception:
                 pass
 
+            self._registrar_auditoria("MODIFICAR_LINEA", "Líneas", f"Línea {num_str} marcada como {'Oculta' if oculto else 'Pública'}", registro_id=num_str)
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
@@ -4325,6 +5014,7 @@ end tell
                 supabase.table('lineas').update({'oculto': True}).eq('numero', num_str).execute()
             except Exception:
                 pass
+            self._registrar_auditoria("CREAR_LINEA_OCULTA", "Líneas", f"Línea oculta creada: {num_str} ({data.get('operador')})", registro_id=num_str, datos_nuevos=data)
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
@@ -4342,6 +5032,7 @@ end tell
                 "encargado":     datos.get('encargado', '')
             }
             safe_supabase(lambda: supabase.table('lineas').update(data).eq('numero', num_str).execute())
+            self._registrar_auditoria("MODIFICAR_LINEA", "Líneas", f"Línea oculta {num_str} actualizada", registro_id=num_str, datos_nuevos=data)
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
@@ -4410,6 +5101,7 @@ end tell
                 'INGRESO': ingreso_val
             }
             safe_supabase(lambda: supabase.table('FastReg').upsert(fast_payload).execute())
+            self._registrar_auditoria("CREAR_FASTREG", "FastReg", f"Ingreso a FastReg - IMEI: {imei} (Operador: {operador}, Línea: {linea_num}, Cliente: {cliente_val or 'Anónimo'})", registro_id=imei, datos_nuevos=fast_payload)
             print(f"[OK] [FastReg] Guardado exitosamente para IMEI {imei} ({operador})")
 
             # Actualizar las_use en lineas
@@ -4445,6 +5137,7 @@ end tell
         """Actualiza un campo específico en la tabla FastReg por IMEI"""
         try:
             safe_supabase(lambda: supabase.table('FastReg').update({campo: valor}).eq('IMEI', str(imei).strip()).execute())
+            self._registrar_auditoria("MODIFICAR_FASTREG", "FastReg", f"FastReg IMEI {imei}: Campo '{campo}' modificado a '{valor}'", registro_id=imei)
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "mensaje": str(e)}
@@ -4488,6 +5181,7 @@ end tell
             }
             safe_supabase(lambda: supabase.table('papelera').upsert(papelera_data).execute())
             safe_supabase(lambda: supabase.table('FastReg').delete().eq('IMEI', imei).execute())
+            self._registrar_auditoria("ELIMINAR_FASTREG", "FastReg", f"Registro rápido con IMEI {imei} descartado y movido a papelera", registro_id=imei)
             print(f"[TRASH] [FastReg] IMEI {imei} movido a papelera")
             return {"status": "success"}
         except Exception as e:
@@ -4572,7 +5266,8 @@ end tell
                                 res_pdf = json.loads(linea_pdf.strip())
                                 if res_pdf.get("status") == "success":
                                     pdf_ruta = res_pdf.get("ruta")
-                                    abrir_archivo(pdf_ruta)
+                                    if not payload.get('no_abrir_auto'):
+                                        abrir_archivo(pdf_ruta)
                                 break
                             except Exception:
                                 pass
@@ -4600,9 +5295,65 @@ end tell
                     except Exception as le:
                         print(f"[WARN] [FastReg] Error updating las_use for line {linea_num}: {le}")
 
-                ret = {"status": "success", "mensaje": "Procesado correctamente"}
-                if pdf_ruta:
-                    ret["pdf_ruta"] = pdf_ruta
+                # Determinar ruta final de la imagen para el modal de Registro Rápido
+                imagen_ruta = None
+                if pdf_ruta and os.path.exists(pdf_ruta):
+                    if pdf_ruta.lower().endswith('.png'):
+                        imagen_ruta = pdf_ruta
+                    elif pdf_ruta.lower().endswith('.pdf'):
+                        try:
+                            import pypdfium2 as pdfium
+                            pdf = pdfium.PdfDocument(pdf_ruta)
+                            page = pdf.get_page(0)
+                            pil_img = page.render(scale=2).to_pil()
+                            png_prev = os.path.splitext(pdf_ruta)[0] + "_preview.png"
+                            pil_img.save(png_prev, "PNG")
+                            imagen_ruta = png_prev
+                        except Exception as pe:
+                            print(f"[FastReg] Error renderizando vista previa de PDF: {pe}")
+
+                if not imagen_ruta:
+                    ss_candidate = payload.get('screenshot_path')
+                    if ss_candidate and os.path.exists(ss_candidate):
+                        imagen_ruta = ss_candidate
+
+                if not imagen_ruta:
+                    try:
+                        from GeneradorPDF import generar_imagen_estandar
+                        from datetime import datetime as _dt
+                        _fecha_hoy = _dt.now().strftime('%d-%m-%Y')
+                        _cliente_ind = payload.get('nombre', 'Anónimo') or 'Anónimo'
+                        _cliente_folder = re.sub(r'[<>:"/\\|?*]', '_', _cliente_ind.strip())
+                        _files_imp_dir = self._get_files_imp_dir()
+                        _output_dir = os.path.join(_files_imp_dir, f"{_cliente_folder} - {_fecha_hoy}")
+                        os.makedirs(_output_dir, exist_ok=True)
+                        datos_img = {
+                            'nombre': payload.get('nombre_propietario') or payload.get('nombre', 'Anónimo'),
+                            'imei': imei,
+                            'modelo': payload.get('modelo', ''),
+                            'operador': payload.get('operador_declaracion', operador),
+                            'linea_usuario': linea_num,
+                            'salida_dir': _output_dir
+                        }
+                        res_gi = generar_imagen_estandar(datos_img)
+                        if res_gi.get('status') == 'success':
+                            imagen_ruta = res_gi.get('ruta')
+                    except Exception as ge:
+                        print(f"[FastReg] Error generando imagen estándar: {ge}")
+
+                ret = {
+                    "status": "success",
+                    "mensaje": "Procesado correctamente",
+                    "imagen_ruta": imagen_ruta,
+                    "pdf_ruta": pdf_ruta,
+                    "datos": {
+                        "imei": imei,
+                        "modelo": payload.get('modelo', ''),
+                        "linea": linea_num,
+                        "operador": operador,
+                        "cliente": payload.get('nombre', 'Anónimo') or 'Anónimo'
+                    }
+                }
                 return ret
                 
             else:
@@ -4796,6 +5547,8 @@ end tell
                             print(f"Error actualizando FastReg status para {imei_val}: {fe_err}")
 
                         # Guardar comprobante pantallazo si se generó
+                        item_imagen = None
+                        dest_ss = None
                         if res_bot and isinstance(res_bot, dict):
                             ss_path = res_bot.get('screenshot_path')
                             if ss_path and os.path.exists(ss_path):
@@ -4804,11 +5557,13 @@ end tell
                                     dest_ss = os.path.join(out_dir, f"{imei_val}_{operador_reg or 'comprobante'}.png")
                                     if os.path.abspath(ss_path) != os.path.abspath(dest_ss):
                                         shutil.copy2(ss_path, dest_ss)
+                                    item_imagen = dest_ss
                                     print(f"[Masivo] Pantallazo guardado en carpeta de lote: {dest_ss}")
                                 except Exception as sse:
                                     print(f"Error guardando comprobante en carpeta de lote: {sse}")
 
                         # PDF o Constancia si es detallada o estándar
+                        _pdf_ruta_generada = None
                         if tipo_declaracion in ['detallada', 'estandar']:
                             try:
                                 enc_nombre = reg_item.get('nombre_propietario') or cliente_nombre
@@ -4844,7 +5599,6 @@ end tell
                                 }
                                 args_pdf = script_command("GeneradorPDF.py") + [json.dumps(datos_pdf)]
                                 _proc_pdf, _stdout_pdf, _ = run_subprocess_safe(args_pdf, timeout=60)
-                                _pdf_ruta_generada = None
                                 for _lp in reversed((_stdout_pdf or '').strip().split('\n')):
                                     _lp = _lp.strip()
                                     if _lp.startswith('{'):
@@ -4857,8 +5611,41 @@ end tell
                                         break
                                 if _pdf_ruta_generada and os.path.exists(_pdf_ruta_generada):
                                     print(f"[Masivo] Declaracion generada exitosamente en Resultados_Masivos: {os.path.basename(_pdf_ruta_generada)}")
+                                    if _pdf_ruta_generada.lower().endswith('.png'):
+                                        item_imagen = _pdf_ruta_generada
+                                    elif _pdf_ruta_generada.lower().endswith('.pdf'):
+                                        try:
+                                            import pypdfium2 as pdfium
+                                            pdf = pdfium.PdfDocument(_pdf_ruta_generada)
+                                            page = pdf.get_page(0)
+                                            pil_img = page.render(scale=2).to_pil()
+                                            png_p = os.path.splitext(_pdf_ruta_generada)[0] + "_preview.png"
+                                            pil_img.save(png_p, "PNG")
+                                            item_imagen = png_p
+                                        except Exception as pe_r:
+                                            print(f"Error renderizando prev PDF masivo: {pe_r}")
                             except Exception as pe:
                                 print(f"Error generando PDF/constancia masivo item {imei_val}: {pe}")
+
+                        # Si aún no tiene imagen de comprobante, generar constancia estándar PNG
+                        if not item_imagen:
+                            try:
+                                from GeneradorPDF import generar_imagen_estandar
+                                res_gi = generar_imagen_estandar({
+                                    'nombre': reg_item.get('nombre_propietario') or reg_item.get('encargado') or cliente_nombre,
+                                    'imei': imei_val,
+                                    'modelo': modelo_val,
+                                    'operador': operador_reg,
+                                    'linea_usuario': linea_num,
+                                    'salida_dir': out_dir
+                                })
+                                if res_gi.get('status') == 'success':
+                                    item_imagen = res_gi.get('ruta')
+                            except Exception as ge:
+                                print(f"Error generando imagen estándar masivo: {ge}")
+
+                        reg_item['imagen_ruta'] = item_imagen or ''
+                        reg_item['estado'] = estado_final
 
                         # Notificar resultado individual al frontend
                         try:
@@ -4872,21 +5659,24 @@ end tell
                         time.sleep(1.2)
 
                     # Fin de todo el lote
+                    datos_lote = {
+                        "total": total,
+                        "exitos": exitos,
+                        "fallos": fallos,
+                        "out_dir": out_dir,
+                        "cliente": cliente_nombre,
+                        "items": items
+                    }
                     try:
                         if self.window:
                             self.window.evaluate_js(f"showToast('Lote Masivo Completado: {exitos} exitosos, {fallos} fallidos.', 'success');")
                             self.window.evaluate_js("if (typeof cargarDatosFastReg === 'function') { cargarDatosFastReg(); }")
                             self.window.evaluate_js("if (typeof renderizarTabla === 'function') { renderizarTabla(); }")
-                        # Abrir carpeta del lote en Resultados_Masivos al completar el lote
-                        try:
-                            abrir_archivo(out_dir)
-                        except Exception:
-                            try:
-                                abrir_archivo(self._get_resultados_masivos_dir())
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
+                            import json
+                            lote_json = json.dumps(datos_lote, ensure_ascii=False)
+                            self.window.evaluate_js(f"if (typeof window.rrFinalizarLoteMasivo === 'function') {{ window.rrFinalizarLoteMasivo({lote_json}); }}")
+                    except Exception as fe_notify:
+                        print(f"Error notificando fin de lote masivo: {fe_notify}")
 
                 # Lanzar en hilo secundario para procesamiento secuencial no bloqueante de la interfaz
                 threading.Thread(

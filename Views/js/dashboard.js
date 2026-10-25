@@ -71,8 +71,6 @@ function aplicarMarqueeSiDesborda(msgElement, wrapperElement) {
     msgElement.style.removeProperty('--toast-marquee-duration');
     wrapperElement.classList.remove('has-overflow');
 
-    void msgElement.offsetWidth;
-
     const textWidth = msgElement.scrollWidth;
     const containerWidth = wrapperElement.clientWidth;
 
@@ -532,26 +530,27 @@ function showToastLoading(message) {
         toastLoadingHideTimer = null;
     }
 
-    t.classList.remove('show');
-    t.removeAttribute('data-toast-state');
+    const wasShowing = t.classList.contains('show');
 
     if (msgEl) msgEl.innerText = message;
     posicionarToastLoadingDesdeDock();
-    void t.offsetWidth;
 
     if (msgEl && wrapperEl) {
         aplicarMarqueeSiDesborda(msgEl, wrapperEl);
     }
 
-    // Reiniciar animación de la barra
-    if (barInner) {
-        barInner.classList.remove('anim');
-        void barInner.offsetWidth;
+    // Asegurar animación de la barra
+    if (barInner && !barInner.classList.contains('anim')) {
         barInner.classList.add('anim');
     }
 
-    t.setAttribute('data-toast-state', 'enter');
-    t.classList.add('show');
+    if (!wasShowing) {
+        t.classList.remove('toast-exiting', 'show');
+        void t.offsetWidth;
+        t.classList.add('toast-entering', 'show');
+        t.style.visibility = 'visible';
+        setTimeout(() => { t.classList.remove('toast-entering'); }, 430);
+    }
 }
 
 function hideToastLoading() {
@@ -566,16 +565,18 @@ function hideToastLoading() {
         btnNotif.style.transform = 'translateY(0)';
     }
 
-    t.setAttribute('data-toast-state', 'exit');
+    t.classList.remove('show', 'toast-entering');
+    t.classList.add('toast-exiting');
 
-    requestAnimationFrame(() => t.classList.remove('show'));
+    if (toastLoadingHideTimer) clearTimeout(toastLoadingHideTimer);
     toastLoadingHideTimer = setTimeout(() => {
         if (!t.classList.contains('show')) {
-            t.removeAttribute('data-toast-state');
+            t.classList.remove('toast-exiting');
+            t.style.visibility = 'hidden';
+            const barInner = document.getElementById('toastLoadingBarInner');
+            barInner?.classList.remove('anim');
         }
-        const barInner = document.getElementById('toastLoadingBarInner');
-        barInner?.classList.remove('anim');
-    }, 420);
+    }, 370);
 }
 
 function posicionarToastDesdeDock() {
@@ -588,10 +589,10 @@ function posicionarToastDesdeDock() {
     const toastHeight = t.offsetHeight || 50;
 
     const y = Math.round(dockRect.top + (dockRect.height / 2) - (toastHeight / 2));
-    // startX: oculto detrás del dock (el dock tiene z-index mayor, lo cubre)
+    // startX: borde derecho del dock (de donde emerge como cápsula)
     const startX = Math.round(dockRect.right - 8);
     // endX: borde derecho de pantalla con margen
-    const endX = window.innerWidth - toastWidth - 16;
+    const endX = Math.max(16, window.innerWidth - toastWidth - 16);
 
     t.style.setProperty('--toast-y', `${y}px`);
     t.style.setProperty('--toast-x-start', `${startX}px`);
@@ -600,8 +601,10 @@ function posicionarToastDesdeDock() {
 
 function showToast(message, icon = "") {
     const t = document.getElementById('toast');
-    const dock = document.querySelector('.mac-dock');
     if (!t) return;
+
+    // Asegurar visibilidad inmediata (previene que quede oculto por estilos previos)
+    t.style.visibility = 'visible';
 
     // Ocultar contadores del dock cuando sale el toast derecho
     const contadores = document.getElementById('ckDockIndicatorsContainer');
@@ -616,9 +619,7 @@ function showToast(message, icon = "") {
         toastHideTimer = null;
     }
 
-    t.classList.remove('show');
-    t.removeAttribute('data-toast-state');
-    
+    const wasShowing = t.classList.contains('show');
     const msgEl = document.getElementById('toastMessage');
     const iconEl = document.getElementById('toastIcon');
     const wrapperEl = msgEl?.parentElement;
@@ -627,73 +628,80 @@ function showToast(message, icon = "") {
     if (iconEl) iconEl.innerHTML = resolverIconoToast(message, icon);
 
     posicionarToastDesdeDock();
-    // Reinicia el timeline para que siempre salga desde el dock.
-    void t.offsetWidth;
 
     let overflowDist = 0;
     if (msgEl && wrapperEl) {
         overflowDist = aplicarMarqueeSiDesborda(msgEl, wrapperEl);
     }
 
-    t.setAttribute('data-toast-state', 'enter');
-    t.classList.add('show');
+    if (!wasShowing) {
+        // Quitar clases residuales
+        t.classList.remove('toast-exiting', 'show');
+        // Forzar reflow para reiniciar la animación spring desde el dock
+        void t.offsetWidth;
+        // Entrada: animación slide + scale + blur spring desde el dock
+        t.classList.add('toast-entering', 'show');
+        setTimeout(() => {
+            t.classList.remove('toast-entering');
+        }, 430);
+    } else {
+        // Ya visible: micro-pulso sutil sin reiniciar posición
+        t.style.transition = 'transform 0.12s cubic-bezier(0.16, 1, 0.3, 1)';
+        t.style.transform = `translate3d(var(--toast-x-end, 0px), var(--toast-y, 0px), 0) scale(1.03)`;
+        setTimeout(() => {
+            t.style.transition = '';
+            t.style.transform = '';
+        }, 120);
+    }
 
-    // Si el texto desborda, extender la duración visible para permitir leer todo el marquee
+    // Duración visible adaptativa
     const duracionVisible = overflowDist > 0
-        ? Math.max(4200, 2000 + overflowDist * 40)
-        : 3000;
+        ? Math.max(4500, 2200 + overflowDist * 40)
+        : 3200;
 
     toastHideTimer = setTimeout(() => {
-        t.setAttribute('data-toast-state', 'exit');
+        // SALIDA: animación fluida hacia el dock con fade anticipado (cero ghost)
+        t.classList.remove('show', 'toast-entering');
+        t.classList.add('toast-exiting');
 
-        // Restaurar contadores cuando el toast derecho empieza a guardarse
-        const contadores = document.getElementById('ckDockIndicatorsContainer');
+        // Restaurar contadores del dock
         if (contadores) {
             contadores.style.opacity = '1';
             contadores.style.pointerEvents = 'auto';
             contadores.style.transform = 'translateY(0)';
         }
 
-        requestAnimationFrame(() => t.classList.remove('show'));
+        // Ocultar al finalizar la animación de salida (360ms)
         setTimeout(() => {
             if (!t.classList.contains('show')) {
-                t.removeAttribute('data-toast-state');
+                t.classList.remove('toast-exiting');
+                t.style.visibility = 'hidden';
             }
-        }, 320);
+        }, 370);
     }, duracionVisible);
 }
 
-['toast', 'toastLoading'].forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener('animationend', (e) => {
-        if (e.target !== el) return;
-        if (el.getAttribute('data-toast-state') === 'enter') {
-            el.removeAttribute('data-toast-state');
-        }
-    });
-});
 
 window.addEventListener('resize', () => {
     const t = document.getElementById('toast');
     if (t && t.classList.contains('show')) {
         posicionarToastDesdeDock();
     }
+    const tl = document.getElementById('toastLoading');
+    if (tl && tl.classList.contains('show')) {
+        posicionarToastLoadingDesdeDock();
+    }
 });
 
 /* ============ TOAST CONFIRMACIÓN CONSULTA INICIAL ============ */
 function mostrarToastConfirmacionConsulta(toCheck) {
     const t = document.getElementById('toast');
-    const dock = document.querySelector('.mac-dock');
     if (!t) return;
 
     if (toastHideTimer) {
         clearTimeout(toastHideTimer);
         toastHideTimer = null;
     }
-
-    t.classList.remove('show');
-    t.removeAttribute('data-toast-state');
 
     document.getElementById('toastIcon').innerHTML = ICONS['info'] || ICONS.success;
     document.getElementById('toastMessage').innerHTML =
@@ -722,31 +730,12 @@ function mostrarToastConfirmacionConsulta(toCheck) {
         >Omitir</button>`;
 
     posicionarToastDesdeDock();
-    void t.offsetWidth;
-    if (dock) {
-        dock.classList.remove('toast-core-split', 'toast-core-merge');
-        void dock.offsetWidth;
-        dock.classList.add('toast-core-split');
-    }
-    t.setAttribute('data-toast-state', 'enter');
-    t.classList.add('show');
-    t.style.pointerEvents = 'auto';
+    requestAnimationFrame(() => {
+        t.classList.add('show');
+    });
 
     function cerrarToastConfirmacion() {
-        t.style.pointerEvents = '';
-        t.setAttribute('data-toast-state', 'exit');
-        if (dock) {
-            dock.classList.remove('toast-core-split', 'toast-core-merge');
-            void dock.offsetWidth;
-            dock.classList.add('toast-core-merge');
-        }
-        requestAnimationFrame(() => t.classList.remove('show'));
-        setTimeout(() => {
-            if (!t.classList.contains('show')) {
-                t.removeAttribute('data-toast-state');
-            }
-            dock?.classList.remove('toast-core-merge');
-        }, 420);
+        t.classList.remove('show');
     }
 
     setTimeout(() => {
@@ -755,11 +744,11 @@ function mostrarToastConfirmacionConsulta(toCheck) {
             setTimeout(() => {
                 showToast(`Consultando ${toCheck.length} registros pendientes/amarillos/rojos...`, "info");
                 procesarColaBackground(toCheck);
-            }, 400);
+            }, 350);
         });
         document.getElementById('toastBtnOmitir')?.addEventListener('click', () => {
             cerrarToastConfirmacion();
-            setTimeout(() => showToast("Consulta inicial omitida.", "info"), 400);
+            setTimeout(() => showToast("Consulta inicial omitida.", "info"), 350);
         });
     }, 50);
 }
@@ -1169,28 +1158,28 @@ function renderizarTabla() {
                 modeloHTML = `<span style="color:var(--color);font-weight:600;font-size:13.5px;">${modVal}</span>`;
             }
 
-            tr.innerHTML = `<td style="width:10px;padding:0 0 0 6px;" class="relative"><div class="neon-indicator"></div></td>
-                        <td style="font-family:'SF Mono','Fira Code','Courier New',monospace;font-size:12.5px;letter-spacing:0.04em;color:var(--color-sec);font-weight:600;font-variant-numeric:tabular-nums;cursor:pointer;" class="select-all imei-copy-cell" onclick="event.stopPropagation(); navigator.clipboard.writeText('${reg.imei}').then(()=>showToast('IMEI copiado','copy'));" title="Copiar IMEI">${reg.imei}</td>
+            tr.innerHTML = `<td style="width: 25px; min-width: 25px; max-width: 25px; padding: 0 5px; text-align: center;" class="relative"><div class="neon-indicator"></div></td>
+                        <td style="font-family:'SF Mono','Fira Code','Courier New',monospace; font-size:12.5px; letter-spacing:0.04em; color:var(--color-sec); font-weight:600; font-variant-numeric:tabular-nums; cursor:pointer;" class="select-all imei-copy-cell" onclick="event.stopPropagation(); navigator.clipboard.writeText('${reg.imei}').then(()=>showToast('IMEI copiado','copy'));" title="Copiar IMEI">${reg.imei}</td>
                         <td id="modelo-${originalIndex}" style="cursor:pointer;" class="select-all" onclick="event.stopPropagation(); navigator.clipboard.writeText('${(reg.modelo || '').replace(/'/g, "\\'")}').then(()=>showToast('Modelo copiado','copy'));" title="Copiar Modelo">${modeloHTML}</td>
                         <td id="estado-${originalIndex}">${estadoHTML}</td>
                         <td id="operador-${originalIndex}">${operadorHTML}</td>
-                        <td style="color:var(--color-sec);opacity:0.85;font-size:13px;">${reg.cliente || ''}</td>
-                        <td style="font-size:10.5px;font-weight:750;letter-spacing:0.08em;text-transform:uppercase;color:var(--color-sec);opacity:0.95;">${reg.razon || ''}</td>
+                        <td style="color:var(--color-sec); opacity:0.85; font-size:13px;" title="${(reg.cliente || '').replace(/"/g, '&quot;')}">${reg.cliente || ''}</td>
+                        <td style="font-size:10.5px; font-weight:750; letter-spacing:0.08em; text-transform:uppercase; color:var(--color-sec); opacity:0.95;" title="${(reg.razon || '').replace(/"/g, '&quot;')}">${reg.razon || ''}</td>
                         <td>${encargadoHTML}</td>
-                        <td style="color:var(--color-sec);font-size:12px;font-weight:650;opacity:0.95;">
+                        <td style="color:var(--color-sec); font-size:12px; font-weight:650; opacity:0.95;">
                             <button onclick="event.stopPropagation(); toggleEstadoPago('${reg.imei}', '${reg.pago || 'No'}', this)" 
                                 class="pago-toggle-btn ${(reg.pago === 'S\u00ed') ? 'pago-si' : 'pago-no'}"
                                 title="${(reg.pago === 'S\u00ed') ? 'Marcado como Pagado' : 'Sin Pago'}">
                                 ${(reg.pago === 'S\u00ed') ? '\u2713 S\u00ed' : '\u00d7 No'}
                             </button>
                         </td>
-                        <td style="color:var(--color-sec);font-size:12px;font-weight:650;opacity:0.95;">
+                        <td style="color:var(--color-sec); font-size:11.5px; font-weight:650; opacity:0.95; line-height:1.2;">
                         ${reg.ingreso ? calcularTiempoTranscurrido(reg.ingreso) : 'N/A'}
-                        <div style="font-size: 9px; opacity: 0.6; font-weight: normal; margin-top: 2px;">
+                        <div style="font-size: 9px; opacity: 0.6; font-weight: normal; margin-top: 1px;">
                             ${reg.ingreso ? new Date(reg.ingreso).toLocaleDateString() : ''}
                         </div>
                     </td>
-                    <td class="text-center">
+                    <td class="text-center" style="width: 100px; min-width: 100px;">
                         <div class="flex justify-center gap-1.5">
                             <button class="btn-icon" onclick="event.stopPropagation(); forzarScraper('${reg.imei}', ${originalIndex})" title="Actualizar">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1299,64 +1288,682 @@ function actualizarUIBotonesRegistro() {
     renderizarPanelOperativo(reg);
 }
 
+function handlePanelOperativoCardClick(e) {
+    // Si el usuario presionó un botón de acción interactivo, input o selector, no cerrar/abrir
+    if (e.target.closest('.op-pill-btn') || e.target.closest('input') || e.target.closest('select') || e.target.closest('a')) {
+        return;
+    }
+    togglePanelOperativo();
+}
+window.handlePanelOperativoCardClick = handlePanelOperativoCardClick;
+
 function renderizarPanelOperativo(reg) {
     const container = document.getElementById('panelOperativoInner');
     if (!container) return;
+    if (!reg) return;
 
-    // Validación para el botón de liquidar (si es el caso)
-    const isPagado = reg.pago === 'Sí' || reg.pago === 'Si';
+    const lineaTexto = (reg.linea || '').trim();
+    const declWomGenerada = reg.ruta_declaracion_generada && reg.fecha_declaracion_generada;
+    const declWomBadge = declWomGenerada
+        ? `<span class="text-[9px] font-bold text-emerald-400 tracking-normal mt-0.5">GENERADO (${reg.fecha_declaracion_generada})</span>`
+        : '';
 
-    // 1. Paleta de colores extraída directamente de tu widget inteligente
-    const COLORS = {
-        registrarWom: { bg: 'rgba(176,38,255,0.07)', bd: 'rgba(176,38,255,0.22)', tx: '#c084fc' },
-        registrarEtb: { bg: 'rgba(0,243,255,0.07)', bd: 'rgba(0,243,255,0.22)', tx: '#67e8f9' },
-        bloquearWom: { bg: 'rgba(239,68,68,0.07)', bd: 'rgba(239,68,68,0.22)', tx: '#f87171' },
-        bloquearEtb: { bg: 'rgba(239,68,68,0.07)', bd: 'rgba(239,68,68,0.22)', tx: '#f87171' },
-        desbloquearWom: { bg: 'rgba(57,255,20,0.07)', bd: 'rgba(57,255,20,0.22)', tx: '#86efac' },
-        desbloquearEtb: { bg: 'rgba(57,255,20,0.07)', bd: 'rgba(57,255,20,0.22)', tx: '#86efac' },
-        declaracionWom: { bg: 'rgba(176,38,255,0.07)', bd: 'rgba(176,38,255,0.22)', tx: '#c084fc' },
-        declaracionGen: { bg: 'rgba(0,243,255,0.05)', bd: 'rgba(0,243,255,0.12)', tx: 'rgba(103,232,249,0.4)' }
-    };
-
-    // 2. Función generadora de botones usando tus clases exactas (w-btn)
-    const btn = (label, onclick, key, id = '', extraClass = '') => {
-        const c = COLORS[key];
-        return `<button ${ id ? `id="${id}"` : '' } class="w-btn w-full flex items-center justify-center min-h-[42px] transition-all hover:scale-[1.02] ${extraClass}"
-            style = "background:${c.bg};border-color:${c.bd};color:${c.tx};"
-            onclick="${onclick}">
-                <span class="text-[10px] font-black uppercase tracking-wider text-center drop-shadow-md">${label}</span>
-        </button> `;
-    };
-
-    // 3. Liquidar trabajo (Condicional: solo se muestra si NO está pagado)
-    const liquidarBtn = isPagado ? '' :
-        `<button onclick = "marcarComoPagado()" class="w-btn-liquidar mt-3 w-full flex-shrink-0" > Liquidar trabajo</button> `;
-
-    // 4. Inyección directa: Grilla de 2 columnas con todas las 8 opciones siempre visibles
     container.innerHTML = `
-                <div class="flex flex-col h-full w-full" >
-                    <div class="grid grid-cols-2 gap-2 mt-2">
-                        ${btn('Registrar WOM', 'ejecutarRegistroWom()', 'registrarWom')}
-                        ${btn('Registrar ETB', 'ejecutarRegistroEtb()', 'registrarEtb')}
-                        ${btn('Bloquear WOM', "ejecutarBloqueoDummy('WOM')", 'bloquearWom', '', 'w-btn-locked')}
-                        ${btn('Bloquear ETB', "ejecutarBloqueoDummy('ETB')", 'bloquearEtb', '', 'w-btn-locked')}
-                        ${btn('Desbloq. WOM', 'solicitarDesbloqueoWom()', 'desbloquearWom')}
-                        ${btn('Desbloq. ETB', `abrirModalDesbloqueoETB('${reg.imei}')`, 'desbloquearEtb')}
-                        ${btn('Decl. WOM', "generarDeclaracion('wom')", 'declaracionWom', 'btnPanelDeclWom')}
-                        ${btn('Decl. General', "generarDeclaracion('general')", 'declaracionGen')}
-                    </div>
-            ${ liquidarBtn }
-        </div>
-                `;
+        <div class="flex flex-col gap-4 w-full py-1">
 
-    // 5. Validar si la declaración WOM ya se generó para actualizar el texto
-    const declWomBtn = document.getElementById('btnPanelDeclWom');
-    if (declWomBtn && reg.ruta_declaracion_generada && reg.fecha_declaracion_generada) {
-        declWomBtn.innerHTML = `<span class="text-[9px] font-black uppercase tracking-wider text-center drop-shadow-md" > Generado(${ reg.fecha_declaracion_generada })</span> `;
-        declWomBtn.style.background = 'rgba(176,38,255,0.25)';
+            <!-- ═══════════════════════════════════════════════════
+                 1. TARJETA REGISTRAR — AZUL NEÓN
+                    Izquierda: Título + botones · Derecha: Línea
+                 ═══════════════════════════════════════════════════ -->
+            <div class="op-card-registrar relative p-5 rounded-2xl overflow-hidden">
+                <div class="aurora-bg"></div>
+                <div class="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 w-full">
+
+                    <!-- Izquierda: título arriba, botones abajo -->
+                    <div class="flex flex-col gap-3">
+                        <div class="flex items-center gap-2.5 mb-0.5">
+                            <span class="text-[11px] font-black uppercase tracking-widest op-title-registrar">REGISTRAR</span>
+                            <span class="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider op-badge-registrar">Módulo Registro</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <button type="button" id="btnOpRegEtb"
+                                onclick="event.stopPropagation(); ejecutarRegistroEtb()"
+                                class="op-pill-btn op-pill-operator op-operator-btn op-btn-etb" title="Registrar con ETB">
+                                <img src="../icons/etbneon.svg" alt="" class="op-operator-bg-icon">
+                                <span class="op-operator-text">ETB</span>
+                            </button>
+                            <button type="button" id="btnOpRegWom"
+                                onclick="event.stopPropagation(); ejecutarRegistroWom()"
+                                class="op-pill-btn op-pill-operator op-operator-btn op-btn-wom" title="Registrar con WOM">
+                                <img src="../icons/womneon.svg" alt="" class="op-operator-bg-icon">
+                                <span class="op-operator-text">WOM</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Derecha: Línea asociada -->
+                    <div class="flex flex-col items-start sm:items-end justify-center w-full sm:w-auto gap-1.5">
+                        <span class="text-[9px] font-black uppercase tracking-widest op-label-linea">LÍNEA ASOCIADA</span>
+                        <button type="button" id="btnOpLineaRelacionada"
+                            onclick="event.stopPropagation(); abrirSelectorLineaWidget(registros[indiceDetallesActual]?.operador || 'WOM')"
+                            class="op-pill-btn op-pill-linea w-full sm:w-auto" title="Asignar o cambiar línea relacionada">
+                            <span class="text-xs font-semibold mr-1.5 op-text-linea-sub">Línea:</span>
+                            <span id="opPanelLineaNumero" class="font-mono font-bold op-text-linea-num">
+                                ${lineaTexto ? lineaTexto : 'Sin asignar'}
+                            </span>
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════
+                 2. TARJETA UNIFICADA — UN MISMO DIV DIVIDIDO
+                    Izquierda VERDE: DESBLOQUEAR · Derecha ROJA: BLOQUEAR
+                    Título arriba · Botones abajo en cada zona
+                 ═══════════════════════════════════════════════════ -->
+            <div class="op-card-split-ops relative rounded-2xl overflow-hidden">
+                <div class="aurora-bg"></div>
+                <div class="relative z-10 grid grid-cols-1 sm:grid-cols-2 h-full">
+
+                    <!-- ZONA DESBLOQUEAR (Verde) -->
+                    <div class="op-zone-desbloquear flex flex-col gap-3 p-5 sm:rounded-l-2xl rounded-t-2xl sm:rounded-t-none">
+                        <!-- Título + badge arriba -->
+                        <div class="flex items-center justify-between">
+                            <span class="text-[11px] font-black uppercase tracking-widest op-title-desbloquear">DESBLOQUEAR</span>
+                            <span class="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider op-badge-desbloquear">Módulo Desbloqueo</span>
+                        </div>
+                        <!-- Botones abajo -->
+                        <div class="flex items-center gap-3 mt-1">
+                            <button type="button" id="btnOpDesbEtb"
+                                onclick="event.stopPropagation(); abrirModalDesbloqueoETB('${reg.imei || ''}')"
+                                class="op-pill-btn op-pill-operator op-operator-btn op-btn-etb" title="Desbloquear con ETB">
+                                <img src="../icons/etbneon.svg" alt="" class="op-operator-bg-icon">
+                                <span class="op-operator-text">ETB</span>
+                            </button>
+                            <button type="button" id="btnOpDesbWom"
+                                onclick="event.stopPropagation(); solicitarDesbloqueoWom()"
+                                class="op-pill-btn op-pill-operator op-operator-btn op-btn-wom" title="Desbloquear con WOM">
+                                <img src="../icons/womneon.svg" alt="" class="op-operator-bg-icon">
+                                <span class="op-operator-text">WOM</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ZONA BLOQUEAR (Roja) -->
+                    <div class="op-zone-bloquear flex flex-col gap-3 p-5 sm:rounded-r-2xl rounded-b-2xl sm:rounded-b-none">
+                        <!-- Título + badge arriba -->
+                        <div class="flex items-center justify-between">
+                            <span class="text-[11px] font-black uppercase tracking-widest op-title-bloquear">BLOQUEAR</span>
+                            <span class="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider op-badge-bloquear">Módulo Bloqueo</span>
+                        </div>
+                        <!-- Botones abajo -->
+                        <div class="flex items-center gap-3 mt-1">
+                            <button type="button" id="btnOpBloqEtb"
+                                onclick="event.stopPropagation(); ejecutarBloqueoDummy('ETB')"
+                                class="op-pill-btn op-pill-operator op-operator-btn op-btn-etb" title="Bloquear con ETB">
+                                <img src="../icons/etbneon.svg" alt="" class="op-operator-bg-icon">
+                                <span class="op-operator-text">ETB</span>
+                            </button>
+                            <button type="button" id="btnOpBloqWom"
+                                onclick="event.stopPropagation(); ejecutarBloqueoDummy('WOM')"
+                                class="op-pill-btn op-pill-operator op-operator-btn op-btn-wom" title="Bloquear con WOM">
+                                <img src="../icons/womneon.svg" alt="" class="op-operator-bg-icon">
+                                <span class="op-operator-text">WOM</span>
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════
+                 3. FILA DE DECLARACIONES
+                 ═══════════════════════════════════════════════════ -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+                <!-- Declaración WOM (Morado Neón con logo torcido) -->
+                <button type="button" id="btnPanelDeclWom"
+                    onclick="event.stopPropagation(); generarDeclaracion('wom')"
+                    class="op-pill-btn op-pill-decl op-operator-btn op-btn-wom flex items-center justify-between px-6"
+                    title="Generar Declaración WOM">
+                    <img src="../icons/womneon.svg" alt="" class="op-operator-bg-icon">
+                    <div class="flex flex-col text-left leading-tight relative z-10">
+                        <span class="tracking-widest opacity-75 text-[10px]">DECLARACIÓN</span>
+                        <span class="tracking-widest font-black text-sm">WOM</span>
+                        ${declWomBadge}
+                    </div>
+                    <svg class="w-5 h-5 opacity-80 relative z-10 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                </button>
+
+                <!-- Declaración de Registro (Dividido en 4 al hacer hover) -->
+                <div id="btnPanelDeclRegistro"
+                    class="op-pill-btn op-pill-decl op-neon-cyan op-decl-split-container relative p-0 overflow-hidden"
+                    title="Generar Declaración de Registro">
+                    <!-- Estado Normal -->
+                    <div class="op-decl-reg-default flex flex-col items-center justify-center w-full h-full pointer-events-none">
+                        <span class="tracking-widest opacity-75 text-[10px]">DECLARACIÓN</span>
+                        <span class="tracking-widest font-black text-sm">DE REGISTRO</span>
+                    </div>
+                    <!-- Estado Dividido en 4 (aparece al poner el puntero) -->
+                    <div class="op-decl-reg-split absolute inset-0 grid grid-cols-4 w-full h-full opacity-0 pointer-events-none">
+                        <!-- Claro -->
+                        <button type="button" class="op-quad-btn op-quad-claro"
+                            onclick="event.stopPropagation(); generarDeclaracionRegistro('Claro')"
+                            title="Declaración Claro">
+                            <img src="../icons/claroneon.svg" alt="Claro" class="op-quad-img">
+                        </button>
+                        <!-- Tigo -->
+                        <button type="button" class="op-quad-btn op-quad-tigo"
+                            onclick="event.stopPropagation(); generarDeclaracionRegistro('Tigo')"
+                            title="Declaración Tigo">
+                            <img src="../icons/tigoneon.svg" alt="Tigo" class="op-quad-img">
+                        </button>
+                        <!-- ETB -->
+                        <button type="button" class="op-quad-btn op-quad-etb"
+                            onclick="event.stopPropagation(); generarDeclaracionRegistro('ETB')"
+                            title="Declaración ETB">
+                            <img src="../icons/etbneon.svg" alt="ETB" class="op-quad-img">
+                        </button>
+                        <!-- WOM -->
+                        <button type="button" class="op-quad-btn op-quad-wom"
+                            onclick="event.stopPropagation(); generarDeclaracionRegistro('WOM')"
+                            title="Declaración WOM">
+                            <img src="../icons/womneon.svg" alt="WOM" class="op-quad-img">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Declaración No Oficial (Abre Modal con Slider) -->
+                <button type="button" id="btnPanelDeclNoOficial"
+                    onclick="event.stopPropagation(); abrirModalDeclaracionNoOficial()"
+                    class="op-pill-btn op-pill-decl op-neon-darkblue flex flex-col items-center justify-center"
+                    title="Generar Declaración No Oficial">
+                    <span class="tracking-widest opacity-75 text-[10px]">DECLARACIÓN</span>
+                    <span class="tracking-widest font-black text-sm">NO OFICIAL</span>
+                </button>
+            </div>
+
+        </div>
+    `;
+
+    // Si el panel ya estaba abierto, recalcular la altura máxima para evitar cortes
+    const content = document.getElementById('panelOperativoContent');
+    if (content && _panelOperativoAbierto) {
+        content.style.maxHeight = content.scrollHeight + 'px';
     }
 }
 window.renderizarPanelOperativo = renderizarPanelOperativo;
+
+function generarDeclaracionRegistro(operador = null) {
+    if (indiceDetallesActual === null && (!registros || registros.length === 0)) {
+        showToast('Abre el detalle de un trabajo primero', 'warning');
+        return;
+    }
+    generarDeclaracion('general', operador);
+}
+window.generarDeclaracionRegistro = generarDeclaracionRegistro;
+
+function generarDeclaracionNoOficial() {
+    abrirModalDeclaracionNoOficial();
+}
+window.generarDeclaracionNoOficial = generarDeclaracionNoOficial;
+
+/* ============================================================
+   MODAL DECLARACIÓN NO OFICIAL — LÓGICA & SLIDER
+   ============================================================ */
+
+window.dnoOperadorActual = 'Claro';
+window.dnoEstadoActual = 'Bloqueado';
+
+function dnoObtenerTextoDeclaracion(estado, modelo, imei) {
+    const modStr = (modelo || '').trim();
+    const est = (estado || 'Bloqueado').toLowerCase();
+
+    if (est.includes('desbloqueo en proceso')) {
+        return `Te queremos contar que hemos recibido tu solicitud para el proceso de desbloqueo del terminal móvil ${modStr ? modStr + ' ' : ''}identificado con el IMEI ${imei} y pronto podras volver a navegar con nosotros.`;
+    } else if (est.includes('bloqueo en proceso')) {
+        return `Hemos recibido tu solicitud de bloqueo del terminal móvil ${modStr ? modStr + ' ' : ''}identificado con el IMEI ${imei} y en unas horas podras verificar su estado en www.imeicolombia.com.`;
+    } else if (est.includes('desbloqueado')) {
+        return `El terminal movil ${modStr ? modStr + ' ' : ''}con IMEI ${imei} ha sido desbloqueado exitosamente.`;
+    } else {
+        return `El terminal movil ${modStr ? modStr + ' ' : ''}con IMEI ${imei} ha sido bloqueado exitosamente.`;
+    }
+}
+
+function abrirModalDeclaracionNoOficial() {
+    if (indiceDetallesActual === null && (!registros || registros.length === 0)) {
+        showToast('Selecciona o abre un registro primero', 'warning');
+        return;
+    }
+
+    const reg = (indiceDetallesActual !== null && registros[indiceDetallesActual]) ? registros[indiceDetallesActual] : {};
+    const imei = reg.imei || 'Sin asignar';
+    const modelo = reg.modelo ? `· ${reg.modelo}` : '';
+
+    const elImei = document.getElementById('dnoImei');
+    const elModelo = document.getElementById('dnoModelo');
+    if (elImei) elImei.innerText = imei;
+    if (elModelo) elModelo.innerText = modelo;
+
+    // Detectar si el registro tiene operador asignado para preseleccionar ese tab
+    const regOp = (reg.operador || '').toLowerCase();
+    let opIndex = 0;
+    let opName = 'Claro';
+    if (regOp.includes('tigo')) { opIndex = 1; opName = 'Tigo'; }
+    else if (regOp.includes('etb')) { opIndex = 2; opName = 'ETB'; }
+    else if (regOp.includes('wom')) { opIndex = 3; opName = 'WOM'; }
+
+    // Preseleccionar estado según el estado actual del registro si aplica
+    let estadoIni = 'Bloqueado';
+    const regEst = (reg.estado || '').toLowerCase();
+    if (regEst.includes('desbloqueo en proceso')) estadoIni = 'Desbloqueo en proceso';
+    else if (regEst.includes('bloqueo en proceso')) estadoIni = 'Bloqueo en proceso';
+    else if (regEst.includes('desbloqueado')) estadoIni = 'Desbloqueado';
+
+    dnoSeleccionarOperador(opName, opIndex);
+    dnoSeleccionarEstado(estadoIni);
+
+    const overlay = document.getElementById('declaracionNoOficialOverlay');
+    if (overlay) overlay.classList.add('active');
+}
+window.abrirModalDeclaracionNoOficial = abrirModalDeclaracionNoOficial;
+
+function cerrarModalDeclaracionNoOficial() {
+    const overlay = document.getElementById('declaracionNoOficialOverlay');
+    if (overlay) overlay.classList.remove('active');
+}
+window.cerrarModalDeclaracionNoOficial = cerrarModalDeclaracionNoOficial;
+
+function dnoSeleccionarOperador(op, index) {
+    window.dnoOperadorActual = op;
+
+    // Actualizar tabs activas
+    const tabs = ['Claro', 'Tigo', 'ETB', 'WOM'];
+    tabs.forEach((t, i) => {
+        const tabEl = document.getElementById(`dnoTab${t}`);
+        if (tabEl) {
+            if (i === index) tabEl.classList.add('dno-tab-active');
+            else tabEl.classList.remove('dno-tab-active');
+        }
+    });
+
+    // Mover slider indicator y asignar clase de color correspondiente
+    const slider = document.getElementById('dnoTabSlider');
+    if (slider) {
+        slider.className = `dno-tab-slider dno-slider-pos-${index} dno-color-${op.toLowerCase()}`;
+    }
+
+    // Actualizar título / nombre del operador activo
+    const lblOp = document.getElementById('dnoNombreOperador');
+    if (lblOp) {
+        lblOp.innerText = op;
+        const colorClasses = {
+            Claro: 'text-red-400',
+            Tigo: 'text-blue-400',
+            ETB: 'text-cyan-400',
+            WOM: 'text-purple-400'
+        };
+        lblOp.className = `${colorClasses[op] || 'text-blue-400'} font-bold uppercase`;
+    }
+
+
+
+    dnoActualizarVistaPrevia();
+}
+window.dnoSeleccionarOperador = dnoSeleccionarOperador;
+
+function dnoSeleccionarEstado(estado) {
+    window.dnoEstadoActual = estado;
+
+    const btnMap = {
+        'Bloqueado': 'dnoBtnBloqueado',
+        'Desbloqueado': 'dnoBtnDesbloqueado',
+        'Desbloqueo en proceso': 'dnoBtnDesbProceso',
+        'Bloqueo en proceso': 'dnoBtnBloqProceso'
+    };
+
+    Object.keys(btnMap).forEach(k => {
+        const btn = document.getElementById(btnMap[k]);
+        if (btn) {
+            if (k === estado) {
+                btn.classList.add('dno-action-selected');
+            } else {
+                btn.classList.remove('dno-action-selected');
+            }
+        }
+    });
+
+    dnoActualizarVistaPrevia();
+}
+window.dnoSeleccionarEstado = dnoSeleccionarEstado;
+
+function dnoActualizarVistaPrevia() {
+    const reg = (indiceDetallesActual !== null && registros[indiceDetallesActual]) ? registros[indiceDetallesActual] : {};
+    const imei = reg.imei || 'Sin asignar';
+    const modelo = reg.modelo || '';
+    const op = window.dnoOperadorActual || 'Claro';
+    const estado = window.dnoEstadoActual || 'Bloqueado';
+
+    const msgEl = document.getElementById('dnoCardMessage');
+    if (msgEl) {
+        msgEl.innerText = dnoObtenerTextoDeclaracion(estado, modelo, imei);
+    }
+
+    const logoMap = {
+        'Claro': '../icons/Claro.png',
+        'Tigo': '../icons/Tigo.png',
+        'ETB': '../icons/etb.png',
+        'WOM': '../icons/wom.png'
+    };
+
+    const logoEl = document.getElementById('dnoCardLogo');
+    if (logoEl) {
+        logoEl.src = logoMap[op] || '../icons/Claro.png';
+    }
+
+    const headerEl = document.getElementById('dnoCardHeader');
+    if (headerEl) {
+        const headerColors = {
+            'Claro': '#DA291C',
+            'Tigo': '#00377B',
+            'ETB': '#005BAC',
+            'WOM': '#5F259F'
+        };
+        headerEl.style.backgroundColor = headerColors[op] || '#DA291C';
+        headerEl.className = `dno-card-header dno-header-${op.toLowerCase()} px-6 py-3.5 flex items-center justify-between transition-colors duration-300`;
+    }
+
+    const fechaEl = document.getElementById('dnoCardFecha');
+    if (fechaEl) {
+        const ahora = new Date();
+        fechaEl.innerText = ahora.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + ahora.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+    }
+}
+window.dnoActualizarVistaPrevia = dnoActualizarVistaPrevia;
+
+async function dnoGenerarCanvasTarjeta() {
+    const reg = (indiceDetallesActual !== null && registros[indiceDetallesActual]) ? registros[indiceDetallesActual] : {};
+    const imei = reg.imei || 'Sin asignar';
+    const modelo = reg.modelo || '';
+    const op = window.dnoOperadorActual || 'Claro';
+    const estado = window.dnoEstadoActual || 'Bloqueado';
+    const texto = dnoObtenerTextoDeclaracion(estado, modelo, imei);
+
+    const ops = {
+        'Claro': { color: '#DA291C', logo: '../icons/Claro.png' },
+        'Tigo': { color: '#00377B', logo: '../icons/Tigo.png' },
+        'ETB': { color: '#005BAC', logo: '../icons/etb.png' },
+        'WOM': { color: '#5F259F', logo: '../icons/wom.png' }
+    };
+    const opInfo = ops[op] || ops['Claro'];
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const width = 820;
+    const headerHeight = 72;
+
+    // Medir y ajustar saltos de línea del mensaje
+    ctx.font = '500 21px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+    const maxTextWidth = width - 70;
+    const words = texto.split(' ');
+    const lines = [];
+    let curLine = '';
+    for (let i = 0; i < words.length; i++) {
+        const testLine = curLine + words[i] + ' ';
+        if (ctx.measureText(testLine).width > maxTextWidth && i > 0) {
+            lines.push(curLine.trim());
+            curLine = words[i] + ' ';
+        } else {
+            curLine = testLine;
+        }
+    }
+    if (curLine) {
+        lines.push(curLine.trim());
+    }
+
+    const lineHeight = 34;
+    const bodyHeight = 36 + (lines.length * lineHeight) + 40;
+    const totalHeight = headerHeight + bodyHeight;
+
+    canvas.width = width;
+    canvas.height = totalHeight;
+
+    // Fondo redondeado con esquinas suaves
+    const r = 20;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(r, 0);
+    ctx.lineTo(canvas.width - r, 0);
+    ctx.quadraticCurveTo(canvas.width, 0, canvas.width, r);
+    ctx.lineTo(canvas.width, canvas.height - r);
+    ctx.quadraticCurveTo(canvas.width, canvas.height, canvas.width - r, canvas.height);
+    ctx.lineTo(r, canvas.height);
+    ctx.quadraticCurveTo(0, canvas.height, 0, canvas.height - r);
+    ctx.lineTo(0, r);
+    ctx.quadraticCurveTo(0, 0, r, 0);
+    ctx.closePath();
+    ctx.clip();
+
+    // 1. Fondo blanco del cuerpo
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 2. Header del color del operador
+    ctx.fillStyle = opInfo.color;
+    ctx.fillRect(0, 0, canvas.width, headerHeight);
+
+    // 3. Logo .png del operador dentro de una píldora blanca para contraste perfecto
+    try {
+        const logoImg = new Image();
+        logoImg.crossOrigin = 'anonymous';
+        logoImg.src = opInfo.logo;
+        await new Promise((resolve) => {
+            if (logoImg.complete) return resolve();
+            logoImg.onload = resolve;
+            logoImg.onerror = resolve;
+        });
+
+        if (logoImg.width > 0) {
+            const aspect = logoImg.width / logoImg.height;
+            let targetH = 38;
+            let targetW = targetH * aspect;
+            if (targetW > 130) {
+                targetW = 130;
+                targetH = targetW / aspect;
+            }
+
+            const pillW = targetW + 24;
+            const pillH = 48;
+            const pillX = 30;
+            const pillY = (headerHeight - pillH) / 2;
+
+            // Píldora blanca
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            if (ctx.roundRect) {
+                ctx.roundRect(pillX, pillY, pillW, pillH, 8);
+            } else {
+                ctx.rect(pillX, pillY, pillW, pillH);
+            }
+            ctx.fill();
+
+            // Dibujar logo .png centrado en la píldora
+            const logoX = pillX + (pillW - targetW) / 2;
+            const logoY = pillY + (pillH - targetH) / 2;
+            ctx.drawImage(logoImg, logoX, logoY, targetW, targetH);
+        }
+    } catch (_) {}
+
+    // 4. Mensaje Principal Solicitado (negro/carbón sobre fondo blanco)
+    ctx.fillStyle = '#1E293B';
+    ctx.font = '500 21px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+    ctx.textAlign = 'left';
+
+    let curY = headerHeight + 38;
+    for (const line of lines) {
+        ctx.fillText(line, 35, curY);
+        curY += lineHeight;
+    }
+
+    // 5. Fecha sutil en la esquina inferior derecha (sin 'registro verificado')
+    const ahora = new Date();
+    const fechaTxt = ahora.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + ahora.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+    ctx.fillStyle = '#94A3B8';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(fechaTxt, canvas.width - 35, canvas.height - 20);
+
+    ctx.restore();
+
+    // 6. Borde exterior de la tarjeta sutil y limpio
+    ctx.save();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = '#E2E8F0';
+    ctx.beginPath();
+    ctx.moveTo(r, 1);
+    ctx.lineTo(canvas.width - r, 1);
+    ctx.quadraticCurveTo(canvas.width - 1, 1, canvas.width - 1, r);
+    ctx.lineTo(canvas.width - 1, canvas.height - r);
+    ctx.quadraticCurveTo(canvas.width - 1, canvas.height - 1, canvas.width - r, canvas.height - 1);
+    ctx.lineTo(r, canvas.height - 1);
+    ctx.quadraticCurveTo(1, canvas.height - 1, 1, canvas.height - r);
+    ctx.lineTo(1, r);
+    ctx.quadraticCurveTo(1, 1, r, 1);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+
+    return canvas;
+}
+window.dnoGenerarCanvasTarjeta = dnoGenerarCanvasTarjeta;
+
+async function dnoCopiarImagen() {
+    const btnTexto = document.getElementById('dnoBtnCopiarTexto');
+    const originalText = btnTexto ? btnTexto.innerText : 'Copiar Imagen';
+    if (btnTexto) btnTexto.innerText = 'Copiando imagen...';
+
+    const reg = (indiceDetallesActual !== null && registros[indiceDetallesActual]) ? registros[indiceDetallesActual] : {};
+    const imei = reg.imei || '';
+    const op = window.dnoOperadorActual || 'Claro';
+    const estado = window.dnoEstadoActual || 'Bloqueado';
+
+    try {
+        const canvas = await dnoGenerarCanvasTarjeta();
+        const dataUrl = canvas.toDataURL('image/png');
+
+        let copiadoNativo = false;
+
+        // 1. Intentar API nativa del navegador con Blob (WebKit / macOS)
+        if (navigator.clipboard && window.ClipboardItem) {
+            try {
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+                if (blob) {
+                    await navigator.clipboard.write([
+                        new ClipboardItem({ 'image/png': blob })
+                    ]);
+                    copiadoNativo = true;
+                }
+            } catch (errClip) {
+                console.warn('Fallo en navigator.clipboard, usando backend:', errClip);
+            }
+        }
+
+        // 2. Invocar backend en Python para copiar directamente a NSPasteboard (macOS native)
+        if (window.pywebview?.api?.copiar_imagen_portapapeles) {
+            const res = await window.pywebview.api.copiar_imagen_portapapeles(dataUrl, imei, op, estado);
+            if (res && res.status === 'success') {
+                copiadoNativo = true;
+            }
+        }
+
+        if (copiadoNativo) {
+            if (btnTexto) btnTexto.innerText = '✓ ¡Copiado!';
+            showToast('✓ Imagen copiada al portapapeles. ¡Pégala con Cmd+V en WhatsApp o chats!', 'success');
+            setTimeout(() => {
+                if (btnTexto) btnTexto.innerText = originalText;
+            }, 2500);
+        } else {
+            dnoDescargarImagen();
+            showToast('Imagen guardada en Descargas.', 'info');
+            if (btnTexto) btnTexto.innerText = originalText;
+        }
+    } catch (e) {
+        console.error('Error al copiar imagen:', e);
+        showToast('Error al copiar imagen: ' + String(e), 'error');
+        if (btnTexto) btnTexto.innerText = originalText;
+    }
+}
+window.dnoCopiarImagen = dnoCopiarImagen;
+
+async function dnoDescargarImagen() {
+    try {
+        const reg = (indiceDetallesActual !== null && registros[indiceDetallesActual]) ? registros[indiceDetallesActual] : {};
+        const imei = reg.imei || 'SinIMEI';
+        const op = window.dnoOperadorActual || 'Claro';
+        const estado = window.dnoEstadoActual || 'Bloqueado';
+        const filename = `Constancia_${op}_${estado.replace(/\s+/g, '_')}_${imei}.png`;
+
+        const canvas = await dnoGenerarCanvasTarjeta();
+        const dataUrl = canvas.toDataURL('image/png');
+
+        if (window.pywebview?.api?.guardar_imagen_declaracion) {
+            const res = await window.pywebview.api.guardar_imagen_declaracion(dataUrl, filename, imei, op, estado);
+            if (res && res.status === 'success') {
+                showToast(res.mensaje || 'Imagen guardada en Descargas', 'file');
+                return;
+            }
+        }
+
+        // Fallback navegador
+        const link = document.createElement('a');
+        link.download = filename;
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast('Imagen descargada exitosamente.', 'success');
+    } catch (e) {
+        showToast('Error al guardar imagen: ' + String(e), 'error');
+    }
+}
+window.dnoDescargarImagen = dnoDescargarImagen;
+
+async function dnoGenerarPDF() {
+    if (indiceDetallesActual === null && (!registros || registros.length === 0)) {
+        showToast('Selecciona un registro primero', 'warning');
+        return;
+    }
+    const reg = registros[indiceDetallesActual] || {};
+    const imei = reg.imei || '';
+    const operador = window.dnoOperadorActual || 'Claro';
+    const estado = window.dnoEstadoActual || 'Bloqueado';
+
+    showToastLoading(`Generando PDF ${operador} (${estado})...`);
+    try {
+        if (window.pywebview?.api?.generar_declaracion_no_oficial) {
+            const res = await window.pywebview.api.generar_declaracion_no_oficial(imei, operador, estado);
+            hideToastLoading();
+            if (res && res.status === 'success') {
+                showToast(res.mensaje || `Declaración PDF (${operador} - ${estado}) generada`, 'file');
+            } else {
+                showToast(res?.mensaje || 'Error al generar PDF', 'error');
+            }
+        } else {
+            hideToastLoading();
+            showToast('API de PDF no disponible', 'error');
+        }
+    } catch (e) {
+        hideToastLoading();
+        showToast('Error al generar PDF: ' + String(e), 'error');
+    }
+}
+window.dnoGenerarPDF = dnoGenerarPDF;
+window.dnoEjecutarAccion = function(estado) {
+    dnoSeleccionarEstado(estado);
+    dnoGenerarPDF();
+};
 
 /* ============================================================
    WIDGET INTELIGENTE v4 — Expandible, Minimalista y Corrección No Registro
@@ -1389,10 +1996,29 @@ async function actualizarWidgetInteligente(reg) {
     };
 
     const btn = (label, onclick, key, extraClass = '') => {
+        // Detectar si el texto contiene algún operador para aplicar nombre en color y logo neon torcido de fondo
+        const opMatch = label.match(/\b(wom|etb|claro|tigo)\b/i);
+        if (opMatch) {
+            const opName = opMatch[1].toLowerCase();
+            const opConfig = {
+                wom: { tx: '#e879f9', bd: 'rgba(176,38,255,0.45)', bg: 'rgba(176,38,255,0.08)', icon: '../icons/womneon.svg' },
+                etb: { tx: '#67e8f9', bd: 'rgba(0,243,255,0.45)', bg: 'rgba(0,243,255,0.08)', icon: '../icons/etbneon.svg' },
+                claro: { tx: '#f87171', bd: 'rgba(239,68,68,0.45)', bg: 'rgba(239,68,68,0.08)', icon: '../icons/claroneon.svg' },
+                tigo: { tx: '#60a5fa', bd: 'rgba(59,130,246,0.45)', bg: 'rgba(59,130,246,0.08)', icon: '../icons/tigoneon.svg' }
+            }[opName];
+
+            return `<button onclick="${onclick}" class="w-btn w-full h-full op-operator-btn op-btn-${opName} ${extraClass}"
+                style="background:${opConfig.bg};border-color:${opConfig.bd};color:${opConfig.tx};">
+                <img src="${opConfig.icon}" alt="" class="op-operator-bg-icon">
+                <span class="relative z-10 drop-shadow-md font-bold">${label}</span>
+            </button>`;
+        }
+
         const c = COLORS[key] || COLORS.anexos;
-        return `<button onclick = "${onclick}" class="w-btn w-full h-full ${extraClass}"
-            style = "background:${c.bg};border-color:${c.bd};color:${c.tx};"
-                > <span class="drop-shadow-md">${label}</span></button> `;
+        return `<button onclick="${onclick}" class="w-btn w-full h-full ${extraClass}"
+            style="background:${c.bg};border-color:${c.bd};color:${c.tx};">
+            <span class="drop-shadow-md">${label}</span>
+        </button>`;
     };
 
     const liquidar = isPagado ? '' :
@@ -1545,13 +2171,13 @@ function togglePanelOperativo() {
         content.style.opacity = '1';
         content.style.marginTop = '1.5rem';
         if (icon) icon.style.transform = 'rotate(180deg)';
-        if (txt) txt.textContent = 'Ocultar opciones operativas';
+        if (txt) txt.textContent = 'Ocultar acciones operativas';
     } else {
         content.style.maxHeight = '0';
         content.style.opacity = '0';
         content.style.marginTop = '0';
         if (icon) icon.style.transform = 'rotate(0deg)';
-        if (txt) txt.textContent = 'Mostrar opciones operativas';
+        if (txt) txt.textContent = 'Mostrar acciones operativas';
     }
 }
 window.togglePanelOperativo = togglePanelOperativo;
@@ -1598,6 +2224,9 @@ async function guardarLineaAsignada(numeroLinea) {
         showToast(`Línea ${ numeroLinea } asignada`, 'success');
         if (typeof actualizarWidgetInteligente === 'function') {
             actualizarWidgetInteligente(registros[indiceDetallesActual]);
+        }
+        if (typeof renderizarPanelOperativo === 'function') {
+            renderizarPanelOperativo(registros[indiceDetallesActual]);
         }
         renderizarTabla();
     } else {
@@ -1805,7 +2434,7 @@ async function abrirDetalles(index) {
     const _panelTxt = document.getElementById('txtTogglePanelOp');
     if (_panelContent) { _panelContent.style.maxHeight = '0'; _panelContent.style.opacity = '0'; _panelContent.style.marginTop = '0'; }
     if (_panelIcon) _panelIcon.style.transform = 'rotate(0deg)';
-    if (_panelTxt) _panelTxt.textContent = 'Mostrar opciones operativas';
+    if (_panelTxt) _panelTxt.textContent = 'Mostrar acciones operativas';
     // -- código original sin cambios desde aquí --
     indiceDetallesActual = index;
     const reg = registros[index];
@@ -2861,25 +3490,63 @@ window.crearNuevoClienteDesdeHistorial = crearNuevoClienteDesdeHistorial;
 
 
 
+let _consultandoModeloRegistro = false;
+
 async function consultarModeloRegistro() {
-    const imei = document.getElementById('regImei').value;
-    if (imei.length < 15) return showToast("IMEI incompleto", "warning");
+    const imeiInput = document.getElementById('regImei');
+    if (!imeiInput) return;
+    const imei = (imeiInput.value || '').replace(/\D/g, '').trim();
+    if (imei.length < 15) return showToast("IMEI incompleto (15 dígitos)", "warning");
+
+    if (_consultandoModeloRegistro) return;
+    _consultandoModeloRegistro = true;
 
     const resBox = document.getElementById('regModeloResult');
     const resTxt = document.getElementById('txtModeloResult');
     const btnMan = document.getElementById('btnManualModelo');
 
-    resBox.classList.remove('hidden');
-    resTxt.innerText = "Consultando...";
-    btnMan.classList.add('hidden');
+    if (resBox) resBox.classList.remove('hidden');
+    if (resTxt) resTxt.innerText = "Consultando Movical...";
+    if (btnMan) btnMan.classList.add('hidden');
 
-    const res = await window.pywebview.api.consultar_modelo_solo(imei);
-    if (res.status === "success" && res.modelo) {
-        resTxt.innerText = res.modelo;
-    } else {
-        resTxt.innerText = "No encontrado";
-        btnMan.classList.remove('hidden');
-        btnMan.href = `https://www.movical.net/chequear-imei-lista-negra?imei=${imei}`;
+    showToastLoading("Consultando modelo con Movical...");
+
+    try {
+        let res = null;
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.consultar_modelo_estandar) {
+            res = await window.pywebview.api.consultar_modelo_estandar(imei, true);
+        } else if (window.pywebview && window.pywebview.api && window.pywebview.api.consultar_modelo) {
+            res = await window.pywebview.api.consultar_modelo(imei, true);
+        } else if (window.pywebview && window.pywebview.api && window.pywebview.api.consultar_modelo_solo) {
+            res = await window.pywebview.api.consultar_modelo_solo(imei);
+        }
+
+        hideToastLoading();
+
+        if (res && res.status === "success" && res.modelo) {
+            if (resTxt) resTxt.innerText = res.modelo;
+            showToast(`Modelo detectado: ${res.modelo}`, "success");
+        } else if (res && res.status === "pagina_alterada") {
+            if (typeof window.mostrarModalPaginaAlterada === 'function') {
+                window.mostrarModalPaginaAlterada(res.pagina || 'Movical', res.detalle);
+            }
+            if (resTxt) resTxt.innerText = "Página modificada";
+            showToast(res.mensaje || "Página Movical modificada", "error");
+        } else {
+            if (resTxt) resTxt.innerText = "No encontrado";
+            if (btnMan) {
+                btnMan.classList.remove('hidden');
+                btnMan.href = `https://www.movical.net/chequear-imei-lista-negra?imei=${imei}`;
+            }
+            showToast("No se encontró el modelo en Movical", "warning");
+        }
+    } catch (err) {
+        hideToastLoading();
+        console.error("Error al consultar modelo con Movical:", err);
+        if (resTxt) resTxt.innerText = "Error";
+        showToast("Error al consultar modelo en Movical", "error");
+    } finally {
+        _consultandoModeloRegistro = false;
     }
 }
 
@@ -2936,18 +3603,42 @@ async function tomarPantallazo(imei) {
             abrirDetalles(indiceDetallesActual);
         }
     }
-    showToastLoading("Tomando captura del imei con Imei colombia");
+    showToastLoading("Tomando captura con IMEI Colombia...");
 
     const info = {
         modelo: reg.modelo || '',
         estado: reg.estado || '',
-        operador: reg.operador || ''
+        operador: reg.operador || '',
+        cliente: reg.cliente || '',
+        encargado: reg.encargado || '',
+        fecha: reg.ingreso ? new Date(reg.ingreso).toLocaleString() : ''
     };
 
     try {
         const res = await window.pywebview.api.pantallazo_imei(imei, headlessEnabled, info);
         if (res && res.status === "success") {
-            showToast("Copiado al portapapeles", "copy");
+            showToast("Pantallazo copiado al portapapeles", "copy");
+
+            // Mostrar el pantallazo igual que en Centro de Operaciones
+            if (res.screenshot_path) {
+                const usarLightbox = typeof ckAmpliarScreenshot === 'function';
+                const usarMostrar  = typeof ckMostrarScreenshot  === 'function';
+
+                if (usarMostrar) {
+                    // Muestra en el panel Check si está visible
+                    ckMostrarScreenshot(res.screenshot_path);
+                }
+                if (usarLightbox) {
+                    // Siempre abre el lightbox (mismo comportamiento que Centro de Operaciones)
+                    ckAmpliarScreenshot(res.screenshot_path);
+                } else {
+                    // Fallback: abrir en nueva ventana
+                    const webPath = typeof normalizePathForWeb === 'function'
+                        ? normalizePathForWeb(res.screenshot_path)
+                        : res.screenshot_path;
+                    window.open(`file://${res.screenshot_path}`, '_blank');
+                }
+            }
         } else {
             showToast("Error: " + (res?.mensaje || "No se pudo tomar la captura"), "error");
         }
@@ -2965,6 +3656,7 @@ async function tomarPantallazo(imei) {
     }
 }
 window.tomarPantallazo = tomarPantallazo;
+
 
 async function consultarModeloFila(imei, originalIndex) {
     const idx = (originalIndex !== undefined && originalIndex >= 0 && registros[originalIndex]?.imei === imei)
@@ -3530,22 +4222,28 @@ window.esModeloValidoWom = esModeloValidoWom;
    ACTUALIZACIÓN DEL MÓDULO ETB DESBLOQUEO EN JS
    ============================================================ */
 let etbDesbRutaAnexos = null;
-async function generarDeclaracion(tipo) {
+async function generarDeclaracion(tipo, operador = null) {
     if (tipo === 'general') {
-        if (indiceDetallesActual === null) return;
-        const imei = registros[indiceDetallesActual].imei;
-        showToastLoading('Generando declaración General...');
+        if (indiceDetallesActual === null && (!registros || registros.length === 0)) {
+            showToast('Abre el detalle de un trabajo primero', 'warning');
+            return;
+        }
+        const regAct = (indiceDetallesActual !== null && registros[indiceDetallesActual]) ? registros[indiceDetallesActual] : null;
+        if (!regAct) return;
+        const imei = regAct.imei;
+        const opFinal = operador || (regAct.operador || '').trim() || 'General';
+        showToastLoading(`Generando declaración de registro (${opFinal})...`);
         try {
-            const res = await window.pywebview.api.generar_declaracion_general(imei);
+            const res = await window.pywebview.api.generar_declaracion_general(imei, opFinal);
             hideToastLoading();
             if (res && res.status === 'success') {
-                showToast(res.mensaje || "Declaración general generada", 'file');
+                showToast(res.mensaje || `Declaración de registro (${opFinal}) generada`, 'file');
             } else {
-                showToast(res?.mensaje || "Error al generar declaración general", 'error');
+                showToast(res?.mensaje || "Error al generar declaración", 'error');
             }
         } catch (e) {
             hideToastLoading();
-            showToast('Error al generar declaración general: ' + e, 'error');
+            showToast('Error al generar declaración: ' + e, 'error');
         }
         return;
     }
@@ -3840,8 +4538,9 @@ async function loginCompletadoExitosamente(user) {
     const btnLnHide = document.getElementById('btnLineasAdminHide');
     const btnClHide = document.getElementById('btnClientesSettingsAdmin');
     const btnLineasSettings = document.getElementById('btnLineasSettingsAdmin');
+    const btnAuditoria = document.getElementById('btnAdminAuditoria');
 
-    [btnHide, btnLnHide, btnClHide, btnLineasSettings].forEach(btn => {
+    [btnHide, btnLnHide, btnClHide, btnLineasSettings, btnAuditoria].forEach(btn => {
         if (btn) {
             if (esAdmin) {
                 btn.classList.remove('hidden');
@@ -4335,6 +5034,8 @@ async function ejecutarLogout() {
         document.getElementById('btnAdminHide')?.classList.add('hidden');
         document.getElementById('btnClientesSettingsAdmin')?.classList.add('hidden');
         document.getElementById('btnLineasSettingsAdmin')?.classList.add('hidden');
+        document.getElementById('btnAdminAuditoria')?.classList.add('hidden');
+        if (typeof cerrarAuditoriaPanel === 'function') cerrarAuditoriaPanel();
 
         registros = [];
         renderizarTabla();
@@ -5702,23 +6403,23 @@ function renderizarTablaFastReg(filtrados) {
         const indentHtml = isSubrow ? '<span class="text-cyan-400 font-bold mr-1">└─</span>' : '';
 
         tr.innerHTML = `
-            <td style="width:10px;padding:0 0 0 6px;" class="relative"><div class="neon-indicator"></div></td>
-            <td style="font-family:'SF Mono','Fira Code','Courier New',monospace;font-size:12.5px;letter-spacing:0.04em;color:var(--color-sec);font-weight:600;font-variant-numeric:tabular-nums;cursor:pointer;" class="select-all imei-copy-cell" onclick="event.stopPropagation(); navigator.clipboard.writeText('${imei}').then(()=>showToast('IMEI copiado','copy'));" title="Copiar IMEI">${indentHtml}${imei}</td>
-            <td style="color:var(--color);font-weight:600;font-size:13.5px;cursor:pointer;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${modelo}').then(()=>showToast('Modelo copiado','copy'));" title="Copiar Modelo">${modelo}</td>
-            <td style="color:var(--color-sec);opacity:0.85;font-size:13px;cursor:pointer;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${cliente}').then(()=>showToast('Cliente copiado','copy'));" title="Copiar Cliente">${cliente}</td>
-            <td style="cursor:pointer;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${reg.ESTADO || ''}').then(()=>showToast('Estado copiado','copy'));" title="Copiar Estado">${estadoHTML}</td>
-            <td style="font-family:'SF Mono','Fira Code','Courier New',monospace;font-size:12px;color:var(--color-sec);cursor:pointer;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${linea}').then(()=>showToast('Línea copiada','copy'));" title="Copiar Línea">${linea}</td>
-            <td style="cursor:pointer;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${encName}').then(()=>showToast('Encargado copiado','copy'));" title="Copiar Encargado">${encargadoHTML}</td>
-            <td style="color:var(--color-sec);font-size:12px;font-weight:650;opacity:0.95;">${dateText}</td>
-            <td style="font-weight:700;cursor:pointer;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${reg.OPERADOR || ''}').then(()=>showToast('Operador copiado','copy'));" title="Copiar Operador">${operadorHTML}</td>
-            <td style="color:var(--color-sec);font-size:12px;font-weight:650;opacity:0.95;">
+            <td style="width:16px;min-width:16px;max-width:16px;padding:0 0 0 5px;" class="relative"><div class="neon-indicator"></div></td>
+            <td style="font-family:'SF Mono','Fira Code','Courier New',monospace;font-size:12.5px;letter-spacing:0.04em;color:var(--color-sec);font-weight:600;font-variant-numeric:tabular-nums;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" class="select-all imei-copy-cell" onclick="event.stopPropagation(); navigator.clipboard.writeText('${imei}').then(()=>showToast('IMEI copiado','copy'));" title="Copiar IMEI">${indentHtml}${imei}</td>
+            <td style="color:var(--color);font-weight:600;font-size:13.5px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${modelo}').then(()=>showToast('Modelo copiado','copy'));" title="Copiar Modelo">${modelo}</td>
+            <td style="color:var(--color-sec);opacity:0.85;font-size:13px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${cliente}').then(()=>showToast('Cliente copiado','copy'));" title="Copiar Cliente">${cliente}</td>
+            <td style="cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${reg.ESTADO || ''}').then(()=>showToast('Estado copiado','copy'));" title="Copiar Estado">${estadoHTML}</td>
+            <td style="font-family:'SF Mono','Fira Code','Courier New',monospace;font-size:12px;color:var(--color-sec);cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${linea}').then(()=>showToast('Línea copiada','copy'));" title="Copiar Línea">${linea}</td>
+            <td style="cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${encName}').then(()=>showToast('Encargado copiado','copy'));" title="Copiar Encargado">${encargadoHTML}</td>
+            <td style="color:var(--color-sec);font-size:12px;font-weight:650;opacity:0.95;overflow:hidden;white-space:nowrap;">${dateText}</td>
+            <td style="font-weight:700;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${reg.OPERADOR || ''}').then(()=>showToast('Operador copiado','copy'));" title="Copiar Operador">${operadorHTML}</td>
+            <td style="color:var(--color-sec);font-size:12px;font-weight:650;opacity:0.95;overflow:hidden;white-space:nowrap;">
                 <button onclick="event.stopPropagation(); toggleEstadoPagoFastReg('${imei}', '${reg.PAGO || 'No'}', this)"
                     class="pago-toggle-btn ${(reg.PAGO === 'S\u00ed') ? 'pago-si' : 'pago-no'}"
                     title="${(reg.PAGO === 'S\u00ed') ? 'Marcado como Pagado' : 'Sin Pago'}">
                     ${(reg.PAGO === 'S\u00ed') ? '\u2713 S\u00ed' : '\u00d7 No'}
                 </button>
             </td>
-            <td class="text-center">
+            <td class="text-center" style="overflow:hidden;white-space:nowrap;">
                 <div class="flex justify-center gap-2">
                     <button class="btn-icon" onclick="eliminarRegistroFastReg('${imei}')" title="Mover a Papelera" style="border-color:rgba(239,68,68,0.2); color:#f87171;">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
@@ -7716,4 +8417,593 @@ window.agregarLineaAOcultas = agregarLineaAOcultas;
 window.sacarLineaAPublico = sacarLineaAPublico;
 window.crearNuevaLineaOculta = crearNuevaLineaOculta;
 window.eliminarLineaOcultaConfirm = eliminarLineaOcultaConfirm;
+
+// ── MODAL: PÁGINA ALTERADA / MODIFICADA ──
+let _paginaAlteradaActual = "IMEI Colombia";
+let _detalleAlteradaActual = "";
+
+async function mostrarModalPaginaAlterada(pagina, detalle) {
+    _paginaAlteradaActual = pagina || "IMEI Colombia";
+    _detalleAlteradaActual = detalle || "";
+
+    const overlay = document.getElementById('paginaAlteradaOverlay');
+    const tituloEl = document.getElementById('modalAlteradaTitulo');
+    const contenidoEl = document.getElementById('modalAlteradaContenido');
+    const detalleBox = document.getElementById('modalAlteradaDetalleContainer');
+    const detalleTxt = document.getElementById('modalAlteradaDetalleTexto');
+    const inputPwd = document.getElementById('inputAppPasswordImp');
+    const pwdBadge = document.getElementById('appPwdEstadoLabel');
+
+    if (tituloEl) tituloEl.innerText = `${_paginaAlteradaActual} ha sido modificada`;
+    if (contenidoEl) contenidoEl.innerText = `El estado de la página ${_paginaAlteradaActual} ha cambiado, por favor solicite soporte a Martin.`;
+
+    if (detalle && detalleTxt && detalleBox) {
+        detalleTxt.innerText = detalle;
+        detalleBox.classList.remove('hidden');
+    } else if (detalleBox) {
+        detalleBox.classList.add('hidden');
+    }
+
+    // Consultar si ya hay contraseña de aplicación guardada en BD
+    try {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.obtener_config_app_password_imp) {
+            const res = await window.pywebview.api.obtener_config_app_password_imp();
+            if (res && res.status === 'success' && res.configurada) {
+                if (inputPwd) inputPwd.value = res.valor || '';
+                if (pwdBadge) pwdBadge.classList.remove('hidden');
+            } else {
+                if (pwdBadge) pwdBadge.classList.add('hidden');
+            }
+        }
+    } catch (e) {
+        console.warn("No se pudo cargar contraseña guardada:", e);
+    }
+
+    if (overlay) overlay.classList.remove('hidden');
+}
+
+function cerrarModalPaginaAlterada() {
+    const overlay = document.getElementById('paginaAlteradaOverlay');
+    if (overlay) overlay.classList.add('hidden');
+}
+
+async function guardarPasswordAppImpManual() {
+    const inputPwd = document.getElementById('inputAppPasswordImp');
+    const pwdBadge = document.getElementById('appPwdEstadoLabel');
+    const pwd = inputPwd ? inputPwd.value.trim() : '';
+    if (!pwd) {
+        showToast('Ingrese la contraseña de aplicación antes de guardar.', 'warning');
+        return;
+    }
+
+    try {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.guardar_config_app_password_imp) {
+            const res = await window.pywebview.api.guardar_config_app_password_imp(pwd);
+            if (res && res.status === 'success') {
+                showToast('Contraseña de aplicación guardada en base de datos.', 'success');
+                if (pwdBadge) pwdBadge.classList.remove('hidden');
+            } else {
+                showToast(res.mensaje || 'Error al guardar contraseña.', 'error');
+            }
+        }
+    } catch (e) {
+        showToast('Error: ' + String(e), 'error');
+    }
+}
+
+async function ejecutarNotificarAlteracion() {
+    const btn = document.getElementById('btnNotificarAlteracion');
+    const btnTexto = document.getElementById('btnNotificarAlteracionTexto');
+    const inputPwd = document.getElementById('inputAppPasswordImp');
+    const pwd = inputPwd ? inputPwd.value.trim() : '';
+
+    let remitente = "Usuario IMP";
+    try {
+        if (typeof currentUser !== 'undefined' && currentUser) {
+            remitente = currentUser.nombre || currentUser.usuario || remitente;
+        }
+    } catch (e) {}
+
+    const originalText = btnTexto ? btnTexto.innerText : 'Notificar a Martin';
+    if (btn) btn.disabled = true;
+    if (btnTexto) btnTexto.innerText = 'Enviando correo a Martin...';
+
+    try {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.notificar_pagina_alterada) {
+            const res = await window.pywebview.api.notificar_pagina_alterada(
+                _paginaAlteradaActual,
+                _detalleAlteradaActual,
+                remitente,
+                pwd || null
+            );
+
+            if (res && res.status === 'success') {
+                showToast(res.mensaje || 'Notificación enviada a Martin.', 'success');
+                if (btnTexto) btnTexto.innerText = '✓ ¡Notificado a Martin!';
+                setTimeout(() => {
+                    cerrarModalPaginaAlterada();
+                    if (btn) btn.disabled = false;
+                    if (btnTexto) btnTexto.innerText = originalText;
+                }, 2200);
+            } else {
+                showToast(res.mensaje || 'Error al enviar notificación.', 'error');
+                if (btn) btn.disabled = false;
+                if (btnTexto) btnTexto.innerText = originalText;
+            }
+        } else {
+            showToast('API no disponible para enviar correo.', 'error');
+            if (btn) btn.disabled = false;
+            if (btnTexto) btnTexto.innerText = originalText;
+        }
+    } catch (e) {
+        showToast('Error: ' + String(e), 'error');
+        if (btn) btn.disabled = false;
+        if (btnTexto) btnTexto.innerText = originalText;
+    }
+}
+
+window.mostrarModalPaginaAlterada = mostrarModalPaginaAlterada;
+window.cerrarModalPaginaAlterada = cerrarModalPaginaAlterada;
+window.guardarPasswordAppImpManual = guardarPasswordAppImpManual;
+window.ejecutarNotificarAlteracion = ejecutarNotificarAlteracion;
+window.probarModalPaginaAlterada = function(pagina = "IMEI Colombia", detalle = "Prueba de simulación: se detectó una alteración en la estructura de la página.") {
+    mostrarModalPaginaAlterada(pagina, detalle);
+};
+
+// =========================================================================
+// MÓDULO DE AUDITORÍA Y REGISTRO DE ACTIVIDAD DE USUARIOS (SOLO ADMIN)
+// =========================================================================
+let todosLosRegistrosAuditoria = [];
+
+function safeAuditoriaText(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function getBadgeModuloClass(mod) {
+    switch (mod) {
+        case 'Registros':
+            return 'bg-sky-500/15 text-sky-300 border-sky-500/30';
+        case 'FastReg':
+            return 'bg-amber-500/15 text-amber-300 border-amber-500/30';
+        case 'Clientes':
+            return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
+        case 'Líneas':
+            return 'bg-purple-500/15 text-purple-300 border-purple-500/30';
+        case 'Encargados':
+            return 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30';
+        case 'Seguridad':
+            return 'bg-rose-500/15 text-rose-300 border-rose-500/30';
+        case 'Papelera':
+            return 'bg-orange-500/15 text-orange-300 border-orange-500/30';
+        case 'Sistema':
+            return 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30';
+        default:
+            return 'bg-slate-500/15 text-slate-300 border-slate-500/30';
+    }
+}
+
+function getBadgeAccionClass(acc) {
+    switch (acc) {
+        case 'CREAR':
+            return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/35';
+        case 'MODIFICAR':
+            return 'bg-blue-500/20 text-blue-300 border-blue-500/35';
+        case 'ELIMINAR':
+            return 'bg-rose-500/20 text-rose-300 border-rose-500/35';
+        case 'RESTAURAR':
+            return 'bg-teal-500/20 text-teal-300 border-teal-500/35';
+        case 'LOGIN':
+            return 'bg-purple-500/20 text-purple-300 border-purple-500/35';
+        case 'LOGOUT':
+            return 'bg-slate-500/20 text-slate-300 border-slate-500/35';
+        case 'PIN':
+            return 'bg-amber-500/20 text-amber-300 border-amber-500/35';
+        case 'ESTADO_BD':
+            return 'bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/35';
+        case 'PERFIL':
+            return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/35';
+        default:
+            return 'bg-slate-500/20 text-slate-300 border-slate-500/35';
+    }
+}
+
+function formatearFechaAuditoria(fechaStr) {
+    if (!fechaStr) return '-';
+    try {
+        const cleanStr = String(fechaStr).replace(' ', 'T');
+        const d = new Date(cleanStr);
+        if (isNaN(d.getTime())) return fechaStr;
+        return d.toLocaleString('es-CO', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        });
+    } catch (_) {
+        return fechaStr;
+    }
+}
+
+function abrirAuditoriaPanel() {
+    if (!currentUser || currentUser.rol !== 'admin') {
+        showToast('Acceso restringido: Solo administradores pueden ver el registro de auditoría.', 'error');
+        return;
+    }
+    const modal = document.getElementById('auditoriaOverlay');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    modal.classList.add('active');
+
+    // Resetear filtros
+    const searchInput = document.getElementById('auditoriaSearchInput');
+    if (searchInput) searchInput.value = '';
+    const filtroMod = document.getElementById('auditoriaFiltroModulo');
+    if (filtroMod) filtroMod.value = '';
+    const filtroAcc = document.getElementById('auditoriaFiltroAccion');
+    if (filtroAcc) filtroAcc.value = '';
+    const filtroUsr = document.getElementById('auditoriaFiltroUsuario');
+    if (filtroUsr) filtroUsr.value = '';
+
+    cargarAuditoria(false);
+}
+
+function cerrarAuditoriaPanel() {
+    const modal = document.getElementById('auditoriaOverlay');
+    if (modal) {
+        modal.classList.remove('active');
+        modal.classList.add('hidden');
+    }
+    cerrarAuditoriaDetalleModal();
+}
+
+async function cargarAuditoria(forzar = false) {
+    const reloadIcon = document.getElementById('auditoriaReloadIcon');
+    if (reloadIcon) reloadIcon.classList.add('animate-spin');
+
+    const tbody = document.getElementById('auditoriaTableBody');
+    if (tbody && forzar) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center py-12 text-gray-400">
+                    <div class="flex flex-col items-center justify-center gap-2">
+                        <div class="w-7 h-7 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
+                        <p class="text-xs">Consultando base de datos...</p>
+                    </div>
+                </td>
+            </tr>`;
+    }
+
+    try {
+        if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.obtener_auditoria) {
+            showToast('API de auditoría no disponible', 'error');
+            return;
+        }
+
+        const res = await window.pywebview.api.obtener_auditoria(500);
+        if (res && res.status === 'success') {
+            todosLosRegistrosAuditoria = res.registros || [];
+
+            // Actualizar badge de origen
+            const modoBadge = document.getElementById('auditoriaModoBadge');
+            if (modoBadge) {
+                if (res.origen === 'supabase') {
+                    modoBadge.textContent = 'Supabase · Tabla Auditoría';
+                    modoBadge.className = 'text-[9px] uppercase font-bold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/30';
+                    modoBadge.title = 'Almacenado directamente en tabla public.auditoria';
+                } else if (res.origen === 'supabase_fallback') {
+                    modoBadge.textContent = 'Supabase · Config (Auto-migración activa)';
+                    modoBadge.className = 'text-[9px] uppercase font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/30';
+                    modoBadge.title = 'Usa fallback en configuracion; ejecuta el Script SQL en Supabase para habilitar la tabla dedicada';
+                } else {
+                    modoBadge.textContent = 'SQLite Local · Tabla Auditoría';
+                    modoBadge.className = 'text-[9px] uppercase font-bold text-blue-300 bg-blue-500/20 px-2 py-0.5 rounded-full border border-blue-500/30';
+                    modoBadge.title = 'Almacenado localmente en SQLite';
+                }
+            }
+
+            // Actualizar lista desplegable de usuarios
+            const filtroUsr = document.getElementById('auditoriaFiltroUsuario');
+            if (filtroUsr) {
+                const currVal = filtroUsr.value;
+                const usuariosMap = new Map();
+                todosLosRegistrosAuditoria.forEach(r => {
+                    const u = r.usuario || 'desconocido';
+                    const n = r.nombre_usuario || u;
+                    if (!usuariosMap.has(u)) usuariosMap.set(u, n);
+                });
+                let optionsHtml = '<option value="" class="bg-gray-900">Todos los usuarios</option>';
+                usuariosMap.forEach((nombre, user) => {
+                    optionsHtml += `<option value="${safeAuditoriaText(user)}" class="bg-gray-900">${safeAuditoriaText(nombre)} (@${safeAuditoriaText(user)})</option>`;
+                });
+                filtroUsr.innerHTML = optionsHtml;
+                filtroUsr.value = currVal;
+            }
+
+            filtrarAuditoriaEnVivo();
+        } else {
+            showToast(res?.mensaje || 'Error al cargar registros de auditoría', 'error');
+        }
+    } catch (err) {
+        console.error('Error cargando auditoría:', err);
+        showToast('Error cargando auditoría: ' + String(err), 'error');
+    } finally {
+        if (reloadIcon) {
+            setTimeout(() => reloadIcon.classList.remove('animate-spin'), 300);
+        }
+    }
+}
+
+function filtrarAuditoriaEnVivo() {
+    const search = (document.getElementById('auditoriaSearchInput')?.value || '').toLowerCase().trim();
+    const fMod = document.getElementById('auditoriaFiltroModulo')?.value || '';
+    const fAcc = document.getElementById('auditoriaFiltroAccion')?.value || '';
+    const fUsr = document.getElementById('auditoriaFiltroUsuario')?.value || '';
+
+    const filtrados = todosLosRegistrosAuditoria.filter(item => {
+        if (fMod && (item.modulo || '') !== fMod) return false;
+        if (fAcc && (item.accion || '') !== fAcc) return false;
+        if (fUsr && (item.usuario || '') !== fUsr) return false;
+
+        if (search) {
+            const corpus = `${item.usuario || ''} ${item.nombre_usuario || ''} ${item.rol || ''} ${item.modulo || ''} ${item.accion || ''} ${item.detalles || ''} ${item.registro_id || ''}`.toLowerCase();
+            if (!corpus.includes(search)) return false;
+        }
+        return true;
+    });
+
+    renderizarAuditoriaTabla(filtrados);
+}
+
+function renderizarAuditoriaTabla(lista) {
+    const tbody = document.getElementById('auditoriaTableBody');
+    const badgeCount = document.getElementById('cntAuditoriaBadge');
+    const resumen = document.getElementById('auditoriaResumenTexto');
+
+    if (badgeCount) badgeCount.textContent = `${lista.length} eventos`;
+    if (resumen) resumen.textContent = `Mostrando ${lista.length} de ${todosLosRegistrosAuditoria.length} registros`;
+
+    if (!tbody) return;
+
+    if (!lista || lista.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center py-12 text-gray-400">
+                    <div class="flex flex-col items-center justify-center gap-1.5 opacity-60">
+                        <svg class="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <p class="text-xs">No se encontraron eventos de auditoría con los filtros seleccionados.</p>
+                    </div>
+                </td>
+            </tr>`;
+        return;
+    }
+
+    let rowsHtml = '';
+    lista.forEach(reg => {
+        const globalIdx = todosLosRegistrosAuditoria.indexOf(reg);
+        const inicial = (reg.nombre_usuario || reg.usuario || 'U').charAt(0).toUpperCase();
+        const esAdminUser = (reg.rol === 'admin');
+        const moduloClass = getBadgeModuloClass(reg.modulo);
+        const accionClass = getBadgeAccionClass(reg.accion);
+        const fechaFormateada = formatearFechaAuditoria(reg.fecha);
+
+        const tieneDetallesExtra = (reg.datos_previos || reg.datos_nuevos || reg.registro_id);
+
+        rowsHtml += `
+            <tr class="hover:bg-white/[0.04] transition-colors border-b border-white/5 group">
+                <!-- Fecha -->
+                <td class="py-3 px-4 font-mono text-[11px] text-gray-300 whitespace-nowrap">
+                    <span class="text-cyan-300/80">${fechaFormateada.split(' ')[0] || ''}</span>
+                    <span class="opacity-60 ml-1">${fechaFormateada.split(' ')[1] || ''}</span>
+                </td>
+
+                <!-- Usuario -->
+                <td class="py-3 px-4">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-7 h-7 rounded-lg ${esAdminUser ? 'bg-gradient-to-br from-purple-500/30 to-indigo-500/30 border border-purple-500/40 text-purple-300' : 'bg-gradient-to-br from-cyan-500/30 to-blue-500/30 border border-cyan-500/40 text-cyan-300'} flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0">
+                            ${inicial}
+                        </div>
+                        <div class="flex flex-col min-w-0">
+                            <div class="flex items-center gap-1.5">
+                                <span class="font-semibold text-white truncate max-w-[110px]" title="${safeAuditoriaText(reg.nombre_usuario || reg.usuario)}">${safeAuditoriaText(reg.nombre_usuario || reg.usuario)}</span>
+                                <span class="text-[9px] uppercase font-bold px-1.5 py-0.2 rounded ${esAdminUser ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-blue-500/15 text-blue-300 border border-blue-500/25'}">${safeAuditoriaText(reg.rol || 'user')}</span>
+                            </div>
+                            <span class="text-[10px] text-gray-400 truncate font-mono">@${safeAuditoriaText(reg.usuario || 'desconocido')}</span>
+                        </div>
+                    </div>
+                </td>
+
+                <!-- Módulo -->
+                <td class="py-3 px-3 whitespace-nowrap">
+                    <span class="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${moduloClass}">
+                        ${safeAuditoriaText(reg.modulo || 'General')}
+                    </span>
+                </td>
+
+                <!-- Acción -->
+                <td class="py-3 px-3 whitespace-nowrap">
+                    <span class="inline-block text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border ${accionClass}">
+                        ${safeAuditoriaText(reg.accion || 'ACCION')}
+                    </span>
+                </td>
+
+                <!-- Detalles -->
+                <td class="py-3 px-4">
+                    <div class="flex flex-col gap-1">
+                        <span class="text-gray-200 text-xs leading-relaxed font-normal">${safeAuditoriaText(reg.detalles || 'Sin detalles')}</span>
+                        ${reg.registro_id ? `<div class="flex items-center gap-1 mt-0.5"><span class="text-[9px] text-cyan-400/70 font-mono">ID/Ref:</span><span class="text-[10px] font-mono text-cyan-300 bg-cyan-950/40 px-1.5 py-0.2 rounded border border-cyan-800/40 select-all">${safeAuditoriaText(reg.registro_id)}</span></div>` : ''}
+                    </div>
+                </td>
+
+                <!-- Acción Ver -->
+                <td class="py-3 px-3 text-right whitespace-nowrap">
+                    <button onclick="abrirDetalleAuditoria(${globalIdx})" title="Ver detalles y valores técnicos"
+                        class="px-2.5 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/25 text-[11px] font-medium transition-colors cursor-pointer inline-flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        <span>Ver</span>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = rowsHtml;
+}
+
+function abrirDetalleAuditoria(idx) {
+    const reg = todosLosRegistrosAuditoria[idx];
+    if (!reg) return;
+
+    const infoEl = document.getElementById('auditoriaDetalleInfo');
+    if (infoEl) {
+        const moduloClass = getBadgeModuloClass(reg.modulo);
+        const accionClass = getBadgeAccionClass(reg.accion);
+        const fechaFormateada = formatearFechaAuditoria(reg.fecha);
+
+        infoEl.innerHTML = `
+            <div class="flex items-center justify-between pb-2 border-b border-white/10">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-[10px] uppercase font-black px-2 py-0.5 rounded-md border ${accionClass}">${safeAuditoriaText(reg.accion || 'ACCION')}</span>
+                    <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md border ${moduloClass}">${safeAuditoriaText(reg.modulo || 'MODULO')}</span>
+                    ${reg.registro_id ? `<span class="text-[10px] font-mono text-cyan-300 bg-cyan-900/40 px-2 py-0.5 rounded-md border border-cyan-500/30">Ref: ${safeAuditoriaText(reg.registro_id)}</span>` : ''}
+                </div>
+                <span class="text-[11px] text-gray-400 font-mono">${fechaFormateada}</span>
+            </div>
+            <div class="flex items-center gap-2 text-xs pt-1">
+                <span class="text-gray-400 font-semibold">Responsable:</span>
+                <span class="text-white font-medium">${safeAuditoriaText(reg.nombre_usuario || reg.usuario)}</span>
+                <span class="text-gray-400 font-mono">(@${safeAuditoriaText(reg.usuario || 'desconocido')})</span>
+                <span class="text-[9px] uppercase font-bold text-gray-300 bg-white/10 px-1.5 py-0.2 rounded border border-white/15">${safeAuditoriaText(reg.rol || 'user')}</span>
+            </div>
+            <div class="text-xs pt-1">
+                <span class="text-gray-400 font-semibold block mb-1">Descripción:</span>
+                <div class="p-2.5 rounded-xl bg-black/40 border border-white/10 text-gray-200 text-xs leading-relaxed">${safeAuditoriaText(reg.detalles || 'Sin detalles')}</div>
+            </div>
+        `;
+    }
+
+    const formatearValor = (val) => {
+        if (!val) return '(Ninguno)';
+        try {
+            const parsed = (typeof val === 'string') ? JSON.parse(val) : val;
+            return JSON.stringify(parsed, null, 2);
+        } catch (_) {
+            return String(val);
+        }
+    };
+
+    const prevEl = document.getElementById('auditoriaDetallePrevios');
+    if (prevEl) prevEl.textContent = formatearValor(reg.datos_previos);
+
+    const newEl = document.getElementById('auditoriaDetalleNuevos');
+    if (newEl) newEl.textContent = formatearValor(reg.datos_nuevos);
+
+    const modal = document.getElementById('auditoriaDetalleModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('active');
+    }
+}
+
+function cerrarAuditoriaDetalleModal() {
+    const modal = document.getElementById('auditoriaDetalleModal');
+    if (modal) {
+        modal.classList.remove('active');
+        modal.classList.add('hidden');
+    }
+}
+
+async function copiarScriptSQLAuditoria() {
+    try {
+        let script = '';
+        if (window.pywebview?.api?.obtener_script_sql_auditoria) {
+            const res = await window.pywebview.api.obtener_script_sql_auditoria();
+            if (res && res.status === 'success') {
+                script = res.script;
+            }
+        }
+        if (!script) {
+            script = `-- SCRIPT SQL PARA CREAR LA TABLA DE AUDITORÍA EN SUPABASE
+CREATE TABLE IF NOT EXISTS public.auditoria (
+    id BIGSERIAL PRIMARY KEY,
+    fecha TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    usuario TEXT NOT NULL,
+    nombre_usuario TEXT,
+    rol TEXT DEFAULT 'user',
+    accion TEXT NOT NULL,
+    modulo TEXT NOT NULL,
+    registro_id TEXT,
+    detalles TEXT,
+    datos_previos JSONB,
+    datos_nuevos JSONB,
+    ip_origen TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_auditoria_fecha ON public.auditoria (fecha DESC);
+CREATE INDEX IF NOT EXISTS idx_auditoria_usuario ON public.auditoria (usuario);
+CREATE INDEX IF NOT EXISTS idx_auditoria_modulo ON public.auditoria (modulo);
+CREATE INDEX IF NOT EXISTS idx_auditoria_accion ON public.auditoria (accion);
+ALTER TABLE public.auditoria DISABLE ROW LEVEL SECURITY;`;
+        }
+
+        await navigator.clipboard.writeText(script);
+        showToast('✓ Script SQL copiado al portapapeles. Pégalo en el SQL Editor de Supabase.', 'success');
+    } catch (err) {
+        console.error('Error al copiar script SQL:', err);
+        showToast('Error al copiar el script al portapapeles: ' + String(err), 'error');
+    }
+}
+
+async function exportarAuditoriaExcel() {
+    try {
+        showToast('Generando reporte Excel de auditoría...', 'info');
+        if (window.pywebview?.api?.exportar_auditoria_excel) {
+            const res = await window.pywebview.api.exportar_auditoria_excel();
+            if (res && res.status === 'success') {
+                showToast(res.mensaje || 'Reporte de auditoría exportado exitosamente.', 'success');
+            } else {
+                showToast(res?.mensaje || 'Error al exportar reporte', 'error');
+            }
+        } else {
+            showToast('API no disponible para exportar.', 'error');
+        }
+    } catch (err) {
+        console.error('Error exportando auditoría:', err);
+        showToast('Error al exportar reporte: ' + String(err), 'error');
+    }
+}
+
+// Escuchador en tiempo real para eventos de auditoría emitidos desde Python
+window.recibirNuevoEventoAuditoria = function(evento) {
+    if (!evento) return;
+    todosLosRegistrosAuditoria.unshift(evento);
+    const modal = document.getElementById('auditoriaOverlay');
+    if (modal && !modal.classList.contains('hidden')) {
+        filtrarAuditoriaEnVivo();
+    }
+};
+
+window.abrirAuditoriaPanel = abrirAuditoriaPanel;
+window.cerrarAuditoriaPanel = cerrarAuditoriaPanel;
+window.cargarAuditoria = cargarAuditoria;
+window.filtrarAuditoriaEnVivo = filtrarAuditoriaEnVivo;
+window.abrirDetalleAuditoria = abrirDetalleAuditoria;
+window.cerrarAuditoriaDetalleModal = cerrarAuditoriaDetalleModal;
+window.copiarScriptSQLAuditoria = copiarScriptSQLAuditoria;
+window.exportarAuditoriaExcel = exportarAuditoriaExcel;
+
+
 

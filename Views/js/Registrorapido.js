@@ -354,38 +354,64 @@ async function rrPegarIMEI() {
 }
 window.rrPegarIMEI = rrPegarIMEI;
 
+let _rrConsultandoModelo = false;
+
 async function rrConsultarModelo() {
     const imeiInput = document.getElementById('rrImei');
     if (!imeiInput) return;
-    const imei = imeiInput.value.trim();
+    const imei = imeiInput.value.replace(/\D/g, '').trim();
     if (imei.length !== 15) return showToast('El IMEI debe tener 15 dígitos', 'warning');
+
+    if (_rrConsultandoModelo) return;
+    _rrConsultandoModelo = true;
 
     const resultEl = document.getElementById('rrModeloResult');
     const textoEl = document.getElementById('rrModeloText');
     const manualBtn = document.getElementById('rrBtnManual');
 
     if (resultEl) resultEl.classList.remove('hidden');
-    if (textoEl) textoEl.innerText = "Consultando...";
+    if (textoEl) textoEl.innerText = "Consultando con Movical...";
     if (manualBtn) manualBtn.classList.add('hidden');
 
+    showToastLoading("Consultando modelo con Movical...");
+
     try {
-        const res = await window.pywebview.api.consultar_modelo_solo(imei);
+        let res = null;
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.consultar_modelo_estandar) {
+            res = await window.pywebview.api.consultar_modelo_estandar(imei, true);
+        } else if (window.pywebview && window.pywebview.api && window.pywebview.api.consultar_modelo) {
+            res = await window.pywebview.api.consultar_modelo(imei, true);
+        } else if (window.pywebview && window.pywebview.api && window.pywebview.api.consultar_modelo_solo) {
+            res = await window.pywebview.api.consultar_modelo_solo(imei);
+        }
+
+        hideToastLoading();
+
         if (res && res.status === 'success' && res.modelo) {
             if (textoEl) textoEl.innerText = res.modelo;
             const campoModelo = document.getElementById('rrModelo');
             if (campoModelo) campoModelo.value = res.modelo;
             showToast(`Modelo: ${res.modelo}`, 'success');
+        } else if (res && res.status === 'pagina_alterada') {
+            if (typeof window.mostrarModalPaginaAlterada === 'function') {
+                window.mostrarModalPaginaAlterada(res.pagina || 'Movical', res.detalle);
+            }
+            if (textoEl) textoEl.innerText = "Página modificada";
+            showToast(res.mensaje || 'Página Movical modificada', 'error');
         } else {
             if (textoEl) textoEl.innerText = "No encontrado";
             if (manualBtn) {
                 manualBtn.classList.remove('hidden');
                 manualBtn.href = `https://www.movical.net/chequear-imei-lista-negra?imei=${imei}`;
             }
-            showToast(res?.mensaje || 'Modelo no encontrado', 'warning');
+            showToast(res?.mensaje || 'Modelo no encontrado en Movical', 'warning');
         }
     } catch (e) {
+        hideToastLoading();
         if (textoEl) textoEl.innerText = "Error";
         showToast('Error consultando modelo', 'error');
+    } finally {
+        _rrConsultandoModelo = false;
     }
     rrValidarFormulario();
 }
@@ -576,6 +602,8 @@ async function rrEjecutarAccion() {
     let botMensaje = '';
 
     // 1. Ejecutar automatización si se seleccionó línea permanente
+    let botRes = null;
+    // 1. Ejecutar automatización si se seleccionó línea permanente
     if (lineaSeleccionada) {
         const op = (window.rrOperadorSeleccionado || '').toUpperCase();
         const conPantallazo = rrTabActual === 'original';
@@ -587,11 +615,11 @@ async function rrEjecutarAccion() {
             incluir_propietario: document.getElementById('rrIncPropietario')?.checked ?? true,
             modelo: document.getElementById('rrModelo')?.value?.trim() || '',
             propietario: document.getElementById('rrNombrePropietario')?.value?.trim() || document.getElementById('rrNombre')?.value?.trim() || '',
-            linea: lineaSeleccionada || ''
+            linea: lineaSeleccionada || '',
+            no_abrir_auto: true
         };
         showToast(`Ejecutando bot de automatización ${op}...`, 'info');
         try {
-            let botRes = null;
             if (op === 'WOM') {
                 botRes = await window.pywebview.api.registrar_wom(imei, lineaSeleccionada, false, conPantallazo, opcionesPantallazo);
             } else if (op === 'ETB') {
@@ -601,7 +629,7 @@ async function rrEjecutarAccion() {
                 botExitoso = true;
                 botMensaje = botRes.mensaje || 'Registro de bot exitoso';
                 if (botRes.screenshot_path) {
-                    showToast('Pantallazo descargado/guardado', 'file');
+                    showToast('Comprobante capturado correctamente', 'file');
                 }
             } else {
                 botExitoso = false;
@@ -631,7 +659,9 @@ async function rrEjecutarAccion() {
         linea_usuario: document.getElementById('rrLineaUsuario')?.value.trim() || '',
         correo: document.getElementById('rrCorreo')?.value.trim() || '',
         operador_declaracion: rrOperadorDeclaracion || window.rrOperadorSeleccionado || 'Desconocido',
-        estado: botExitoso ? 'Registrado' : 'Fallido'
+        estado: botExitoso ? 'Registrado' : 'Fallido',
+        screenshot_path: (botRes && botRes.screenshot_path) || '',
+        no_abrir_auto: true
     };
 
     showToastLoading('Guardando registro...');
@@ -643,9 +673,6 @@ async function rrEjecutarAccion() {
         if (res && res.status === 'success') {
             if (botExitoso) {
                 showToast(res.mensaje || 'Registro guardado exitosamente', 'success');
-                if (res.pdf_ruta) {
-                    showToast('Declaración generada y abierta', 'file');
-                }
                 if (activeBtn) {
                     activeBtn.classList.remove('rr-btn-loading');
                     activeBtn.classList.add('ready');
@@ -654,6 +681,20 @@ async function rrEjecutarAccion() {
                     activeBtn.style.borderColor = '#39FF14';
                     activeBtn.innerHTML = '<svg class="w-4 h-4 inline-block mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Exitoso!';
                 }
+
+                // Recargar vista de registros si aplica
+                if (typeof cargarDatosFastReg === 'function' && window.vistaActual === 'registros') {
+                    cargarDatosFastReg();
+                }
+
+                // Cerrar el formulario de Registro Rápido y abrir el modal con la imagen generada
+                setTimeout(() => {
+                    cerrarRegistroRapido();
+                    const imgRuta = res.imagen_ruta || (botRes && botRes.screenshot_path) || res.pdf_ruta || '';
+                    const datosCompletos = res.datos || payload;
+                    rrMostrarModalResultadoIndividual(imgRuta, datosCompletos);
+                }, 600);
+
             } else {
                 showToast(`Registro Fallido: ${botMensaje}`, 'error');
                 if (activeBtn) {
@@ -664,17 +705,6 @@ async function rrEjecutarAccion() {
                     activeBtn.innerHTML = '<svg class="w-4 h-4 inline-block mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Fallido';
                 }
             }
-
-            // Recargar vista de registros si aplica
-            if (typeof cargarDatosFastReg === 'function' && window.vistaActual === 'registros') {
-                cargarDatosFastReg();
-            }
-
-            // Cerrar el modal después de un breve delay
-            setTimeout(() => {
-                cerrarRegistroRapido();
-            }, 1800);
-
         } else {
             showToast(res?.mensaje || 'Error al guardar el registro', 'error');
             if (activeBtn) {
@@ -1605,15 +1635,17 @@ async function rrEnviarRegistrosMasivos() {
         if (btn) btn.disabled = false;
 
         if (res && res.status === 'success') {
-            showToast(res.mensaje || 'Registros masivos guardados correctamente', 'success');
-            if (textBtn) textBtn.innerHTML = '<svg class="w-4 h-4 inline-block mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Lote Procesado!';
+            showToast(res.mensaje || 'Lote iniciado correctamente', 'success');
+            if (textBtn) textBtn.innerHTML = '<svg class="w-4 h-4 inline-block mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Lote en Proceso...';
 
             if (typeof cargarDatosFastReg === 'function' && window.vistaActual === 'registros') {
                 cargarDatosFastReg();
             }
             setTimeout(() => {
                 cerrarRegistroRapido();
-            }, 1200);
+                if (textBtn) textBtn.innerText = 'Enviar Registros';
+                showToast('Procesando lote masivo en segundo plano. Al finalizar se abrirán los resultados.', 'info');
+            }, 800);
         } else {
             showToast(res?.mensaje || 'Error al procesar registros masivos', 'error');
             if (textBtn) textBtn.innerText = 'Enviar Registros';
@@ -1643,3 +1675,525 @@ document.addEventListener('keydown', function(e) {
     e.stopPropagation();
     rrAgregarFilaMasivos(true);
 }, true);
+
+/* ═══════════════════════════════════════════════════════════════
+   MODAL DE RESULTADO INDIVIDUAL DE REGISTRO RÁPIDO
+   ═══════════════════════════════════════════════════════════════ */
+window.rrResultadoIndividualActual = null;
+
+async function rrMostrarModalResultadoIndividual(imagenRuta, datos) {
+    window.rrResultadoIndividualActual = {
+        imagen_ruta: imagenRuta,
+        datos: datos || {},
+        data_url: null
+    };
+
+    const overlay = document.getElementById('rrModalResultadoIndividualOverlay');
+    const subtitulo = document.getElementById('rrResIndSubtitulo');
+    const pillsContainer = document.getElementById('rrResIndPills');
+    const imgEl = document.getElementById('rrResIndImg');
+    const loadingEl = document.getElementById('rrResIndImgLoading');
+
+    const imei = datos?.imei || 'Sin IMEI';
+    const op = datos?.operador || 'Desconocido';
+    const mod = datos?.modelo || 'Equipo';
+    const linea = datos?.linea || 'N/A';
+    const cli = datos?.nombre_propietario || datos?.cliente || datos?.nombre || 'Anónimo';
+
+    if (subtitulo) {
+        subtitulo.innerText = `${imei} · ${op} · Línea ${linea}`;
+    }
+
+    if (pillsContainer) {
+        pillsContainer.innerHTML = `
+            <span class="px-3 py-1 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 text-[11px] font-mono font-bold flex items-center gap-1.5 cursor-pointer hover:bg-cyan-500/25 transition-all"
+                onclick="navigator.clipboard.writeText('${imei}'); showToast('IMEI copiado', 'copy');" title="Clic para copiar IMEI">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" stroke-width="2"/></svg>
+                ${imei}
+            </span>
+            <span class="px-3 py-1 rounded-full bg-white/10 text-white/90 border border-white/15 text-[11px] font-bold">
+                📱 ${mod}
+            </span>
+            <span class="px-3 py-1 rounded-full ${op.toUpperCase()==='WOM'?'bg-purple-500/20 text-purple-300 border border-purple-500/30':'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'} text-[11px] font-bold">
+                📡 ${op}
+            </span>
+            <span class="px-3 py-1 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[11px] font-mono">
+                📞 Línea: ${linea}
+            </span>
+            <span class="px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px]">
+                👤 ${cli}
+            </span>
+        `;
+    }
+
+    if (imgEl) {
+        imgEl.style.display = 'none';
+        imgEl.src = '';
+    }
+    if (loadingEl) loadingEl.style.display = 'flex';
+
+    if (overlay) overlay.classList.add('active');
+
+    // Cargar la imagen generada en Base64
+    if (imagenRuta) {
+        try {
+            const res = await window.pywebview.api.obtener_imagen_base64(imagenRuta);
+            if (res && res.status === 'success' && res.data_url) {
+                window.rrResultadoIndividualActual.data_url = res.data_url;
+                if (imgEl) {
+                    imgEl.src = res.data_url;
+                    imgEl.onload = () => {
+                        imgEl.style.display = 'block';
+                        if (loadingEl) loadingEl.style.display = 'none';
+                    };
+                }
+            } else {
+                if (loadingEl) {
+                    loadingEl.innerHTML = `<span class="text-xs text-amber-400">Comprobante guardado en: ${imagenRuta}</span>`;
+                }
+            }
+        } catch (e) {
+            console.error('Error cargando preview de imagen:', e);
+            if (loadingEl) loadingEl.style.display = 'none';
+        }
+    } else {
+        if (loadingEl) {
+            loadingEl.innerHTML = `<span class="text-xs text-white/50">Comprobante registrado exitosamente</span>`;
+        }
+    }
+}
+window.rrMostrarModalResultadoIndividual = rrMostrarModalResultadoIndividual;
+
+function rrCerrarModalResultadoIndividual() {
+    const overlay = document.getElementById('rrModalResultadoIndividualOverlay');
+    if (overlay) overlay.classList.remove('active');
+}
+window.rrCerrarModalResultadoIndividual = rrCerrarModalResultadoIndividual;
+
+async function rrCopiarResultadoIndividual() {
+    const btnTxt = document.getElementById('txtRrResIndCopiar');
+    const curr = window.rrResultadoIndividualActual;
+    if (!curr) return;
+
+    if (btnTxt) btnTxt.innerText = 'Copiando...';
+
+    const imei = curr.datos?.imei || '';
+    const op = curr.datos?.operador || '';
+    const estado = curr.datos?.estado || 'Registrado';
+    const ruta = curr.imagen_ruta || '';
+    const dataUrl = curr.data_url || '';
+
+    let copiado = false;
+
+    // 1. Intentar Backend nativo (macOS NSPasteboard / PNG)
+    try {
+        if (window.pywebview?.api?.copiar_imagen_portapapeles) {
+            const target = ruta || dataUrl;
+            if (target) {
+                const res = await window.pywebview.api.copiar_imagen_portapapeles(target, imei, op, estado);
+                if (res && res.status === 'success') copiado = true;
+            }
+        }
+    } catch (e) {
+        console.warn('Backend copy error:', e);
+    }
+
+    // 2. Intentar ClipboardItem en navegador si hay dataUrl
+    if (!copiado && dataUrl && navigator.clipboard && window.ClipboardItem) {
+        try {
+            const resBlob = await fetch(dataUrl);
+            const blob = await resBlob.blob();
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+            copiado = true;
+        } catch (e) {
+            console.warn('Web clipboard error:', e);
+        }
+    }
+
+    if (copiado) {
+        if (btnTxt) btnTxt.innerText = '✓ ¡Copiado!';
+        showToast('✓ Imagen copiada al portapapeles. ¡Pégala con Cmd+V en WhatsApp o chats!', 'success');
+        setTimeout(() => { if (btnTxt) btnTxt.innerText = 'Copiar'; }, 2500);
+    } else {
+        // Fallback: copiar texto de registro
+        navigator.clipboard.writeText(`IMEI: ${imei} | Modelo: ${curr.datos?.modelo || ''} | Operador: ${op} | Estado: Registrado`);
+        showToast('Datos del registro copiados al portapapeles', 'info');
+        if (btnTxt) btnTxt.innerText = 'Copiar';
+    }
+}
+window.rrCopiarResultadoIndividual = rrCopiarResultadoIndividual;
+
+async function rrDescargarResultadoIndividual() {
+    const curr = window.rrResultadoIndividualActual;
+    if (!curr) return;
+    const ruta = curr.imagen_ruta || '';
+    const dataUrl = curr.data_url || '';
+    const imei = curr.datos?.imei || 'Equipo';
+    const op = curr.datos?.operador || 'Operador';
+    const filename = `Comprobante_${op}_${imei}.png`;
+
+    try {
+        if (window.pywebview?.api?.guardar_imagen_declaracion) {
+            const target = ruta || dataUrl;
+            const res = await window.pywebview.api.guardar_imagen_declaracion(target, filename, imei, op, 'Registrado');
+            if (res && res.status === 'success') {
+                return showToast(res.mensaje || 'Comprobante guardado en Descargas', 'file');
+            }
+        }
+        if (dataUrl) {
+            const a = document.createElement('a');
+            a.href = dataUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            showToast('Comprobante descargado en Descargas', 'file');
+        }
+    } catch (e) {
+        showToast('Error al descargar: ' + e, 'error');
+    }
+}
+window.rrDescargarResultadoIndividual = rrDescargarResultadoIndividual;
+
+async function rrCompartirResultadoIndividual() {
+    const curr = window.rrResultadoIndividualActual;
+    if (!curr) return;
+    const ruta = curr.imagen_ruta;
+
+    if (ruta) {
+        try {
+            if (window.pywebview?.api?.compartir_archivos) {
+                const res = await window.pywebview.api.compartir_archivos([ruta]);
+                if (res && res.status === 'success') {
+                    return showToast('Menú de compartir abierto', 'info');
+                }
+            }
+        } catch (e) {
+            console.warn('Error backend compartir:', e);
+        }
+    }
+
+    // Fallback: navigator.share
+    if (curr.data_url && navigator.share) {
+        try {
+            const resBlob = await fetch(curr.data_url);
+            const blob = await resBlob.blob();
+            const file = new File([blob], `Comprobante_${curr.datos?.imei || 'IMEI'}.png`, { type: 'image/png' });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    files: [file],
+                    title: `Comprobante IMEI ${curr.datos?.imei}`,
+                    text: `Comprobante de registro para IMEI ${curr.datos?.imei}`
+                });
+                return showToast('Compartido exitosamente', 'success');
+            }
+        } catch (e) {
+            if (e.name !== 'AbortError') console.warn('Share error:', e);
+        }
+    }
+
+    // Fallback secundario: copiar imagen al portapapeles y notificar
+    rrCopiarResultadoIndividual();
+}
+window.rrCompartirResultadoIndividual = rrCompartirResultadoIndividual;
+
+/* ═══════════════════════════════════════════════════════════════
+   MODAL DE RESULTADOS MASIVOS DE REGISTRO RÁPIDO
+   ═══════════════════════════════════════════════════════════════ */
+window.rrLoteMasivoActual = null;
+
+function rrFinalizarLoteMasivo(datosLote) {
+    rrMostrarModalResultadosMasivos(datosLote);
+}
+window.rrFinalizarLoteMasivo = rrFinalizarLoteMasivo;
+
+function rrMostrarModalResultadosMasivos(datosLote) {
+    window.rrLoteMasivoActual = datosLote || { total: 0, exitos: 0, fallos: 0, items: [] };
+
+    const overlay = document.getElementById('rrModalResultadosMasivosOverlay');
+    const subtitulo = document.getElementById('rrResMasSubtitulo');
+    const tbody = document.getElementById('rrTbodyResultadosMasivos');
+
+    const total = datosLote?.total || datosLote?.items?.length || 0;
+    const exitos = datosLote?.exitos ?? total;
+    const fallos = datosLote?.fallos ?? 0;
+
+    if (subtitulo) {
+        subtitulo.innerText = `${total} equipos procesados · ${exitos} exitosos · ${fallos} fallidos`;
+    }
+
+    if (tbody) {
+        tbody.innerHTML = '';
+        const items = datosLote?.items || [];
+        if (items.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-white/40 font-sans">No hay registros para mostrar</td></tr>`;
+        } else {
+            items.forEach((item, idx) => {
+                const imei = item.imei || '-';
+                const modelo = item.modelo || '-';
+                const linea = item.linea || '-';
+                const operador = item.operador || '-';
+                const titular = item.encargado || item.cliente || item.nombre_propietario || 'Anónimo';
+                const estado = item.estado || 'Registrado';
+                const esExito = estado === 'Registrado';
+
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-white/[0.04] transition-colors border-b border-white/5';
+                tr.innerHTML = `
+                    <td class="py-2.5 px-3 text-center">
+                        <input type="checkbox" class="rr-res-masivo-row-check cursor-pointer w-4 h-4 rounded border-white/20 bg-black/50 text-emerald-500 focus:ring-0"
+                            data-idx="${idx}" checked onchange="rrActualizarSeleccionMasivos()">
+                    </td>
+                    <td class="py-2.5 px-3 text-center text-white/40 text-[11px]">${idx + 1}</td>
+                    <td class="py-2.5 px-3 text-cyan-300 font-bold cursor-pointer hover:underline"
+                        onclick="navigator.clipboard.writeText('${imei}'); showToast('IMEI copiado', 'copy');" title="Clic para copiar IMEI">
+                        ${imei}
+                    </td>
+                    <td class="py-2.5 px-3 text-white/80">${modelo}</td>
+                    <td class="py-2.5 px-3 text-purple-300">${linea}</td>
+                    <td class="py-2.5 px-3">
+                        <span class="px-2 py-0.5 rounded-md text-[10px] font-bold ${operador.toUpperCase()==='WOM'?'bg-purple-500/20 text-purple-300 border border-purple-500/30':(operador.toUpperCase()==='ETB'?'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30':'bg-white/10 text-white/80')}">
+                            ${operador}
+                        </span>
+                    </td>
+                    <td class="py-2.5 px-3 text-white/70">${titular}</td>
+                    <td class="py-2.5 px-3 text-center">
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${esExito ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}">
+                            ${estado}
+                        </span>
+                    </td>
+                    <td class="py-2.5 px-3 text-center">
+                        <div class="flex items-center justify-center gap-1.5">
+                            <!-- Copiar Fila -->
+                            <button type="button" onclick="rrCopiarFilaMasivos(${idx})" title="Copiar comprobante al portapapeles"
+                                class="p-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/30 text-cyan-400 hover:text-white border border-cyan-500/20 transition-all">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" stroke-width="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" stroke-width="2"/></svg>
+                            </button>
+                            <!-- Descargar Fila -->
+                            <button type="button" onclick="rrDescargarFilaMasivos(${idx})" title="Descargar comprobante en Descargas"
+                                class="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/30 text-emerald-400 hover:text-white border border-emerald-500/20 transition-all">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                            </button>
+                            <!-- Compartir Fila -->
+                            <button type="button" onclick="rrCompartirFilaMasivos(${idx})" title="Compartir comprobante"
+                                class="p-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/30 text-blue-400 hover:text-white border border-blue-500/20 transition-all">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+    }
+
+    rrActualizarSeleccionMasivos();
+    if (overlay) overlay.classList.add('active');
+}
+window.rrMostrarModalResultadosMasivos = rrMostrarModalResultadosMasivos;
+
+function rrCerrarModalResultadosMasivos() {
+    const overlay = document.getElementById('rrModalResultadosMasivosOverlay');
+    if (overlay) overlay.classList.remove('active');
+}
+window.rrCerrarModalResultadosMasivos = rrCerrarModalResultadosMasivos;
+
+function rrToggleSelectAllMasivos(checked) {
+    const checks = document.querySelectorAll('.rr-res-masivo-row-check');
+    checks.forEach(c => c.checked = checked);
+    rrActualizarSeleccionMasivos();
+}
+window.rrToggleSelectAllMasivos = rrToggleSelectAllMasivos;
+
+function rrActualizarSeleccionMasivos() {
+    const checks = Array.from(document.querySelectorAll('.rr-res-masivo-row-check'));
+    const total = checks.length;
+    const selCount = checks.filter(c => c.checked).length;
+
+    const badge = document.getElementById('rrResMasSelectedBadge');
+    if (badge) badge.innerText = `${selCount} de ${total} seleccionados`;
+
+    const masterCheck = document.getElementById('rrResMasSelectAll');
+    if (masterCheck) {
+        masterCheck.checked = (total > 0 && selCount === total);
+        masterCheck.indeterminate = (selCount > 0 && selCount < total);
+    }
+}
+window.rrActualizarSeleccionMasivos = rrActualizarSeleccionMasivos;
+
+function rrObtenerItemsSeleccionadosMasivos() {
+    if (!window.rrLoteMasivoActual || !window.rrLoteMasivoActual.items) return [];
+    const checks = Array.from(document.querySelectorAll('.rr-res-masivo-row-check'));
+    const selectedIndices = checks.filter(c => c.checked).map(c => parseInt(c.dataset.idx, 10));
+    return selectedIndices.map(idx => window.rrLoteMasivoActual.items[idx]).filter(Boolean);
+}
+window.rrObtenerItemsSeleccionadosMasivos = rrObtenerItemsSeleccionadosMasivos;
+
+async function rrCopiarSeleccionadosMasivos() {
+    const selected = rrObtenerItemsSeleccionadosMasivos();
+    if (selected.length === 0) {
+        return showToast('Selecciona al menos un registro para copiar', 'warning');
+    }
+
+    if (selected.length === 1) {
+        const item = selected[0];
+        if (item.imagen_ruta) {
+            try {
+                const res = await window.pywebview.api.copiar_imagen_portapapeles(item.imagen_ruta, item.imei, item.operador, item.estado || 'Registrado');
+                if (res && res.status === 'success') {
+                    return showToast('✓ Imagen copiada al portapapeles. Pégala con Cmd+V', 'success');
+                }
+            } catch (e) {}
+        }
+    }
+
+    // Copiar tabla estructurada en texto tabulado (compatible con Excel / WhatsApp / Sheets)
+    const header = ['#', 'IMEI', 'Modelo', 'Línea', 'Operador', 'Titular', 'Estado'].join('\t');
+    const rows = selected.map((item, i) => [
+        i + 1,
+        item.imei || '',
+        item.modelo || '',
+        item.linea || '',
+        item.operador || '',
+        item.encargado || item.cliente || '',
+        item.estado || 'Registrado'
+    ].join('\t'));
+
+    const textToCopy = [header, ...rows].join('\n');
+    try {
+        await navigator.clipboard.writeText(textToCopy);
+        showToast(`✓ Datos de ${selected.length} registro${selected.length > 1 ? 's' : ''} copiados al portapapeles`, 'success');
+    } catch (e) {
+        showToast('Error copiando al portapapeles', 'error');
+    }
+}
+window.rrCopiarSeleccionadosMasivos = rrCopiarSeleccionadosMasivos;
+
+async function rrDescargarSeleccionadosMasivos() {
+    const selected = rrObtenerItemsSeleccionadosMasivos();
+    if (selected.length === 0) {
+        return showToast('Selecciona al menos un registro para descargar', 'warning');
+    }
+
+    const rutas = selected.map(i => i.imagen_ruta).filter(r => Boolean(r));
+    if (rutas.length === 0) {
+        return showToast('No hay comprobantes disponibles para los registros seleccionados', 'warning');
+    }
+
+    try {
+        showToastLoading(`Descargando ${rutas.length} comprobante(s)...`);
+        const res = await window.pywebview.api.descargar_multiples_archivos(rutas, 'Comprobantes_Masivos');
+        hideToastLoading();
+        if (res && res.status === 'success') {
+            showToast(res.mensaje || 'Comprobantes guardados en Descargas', 'file');
+        } else {
+            showToast(res?.mensaje || 'Error al guardar comprobantes', 'error');
+        }
+    } catch (e) {
+        hideToastLoading();
+        showToast('Error al descargar comprobantes: ' + e, 'error');
+    }
+}
+window.rrDescargarSeleccionadosMasivos = rrDescargarSeleccionadosMasivos;
+
+async function rrCompartirSeleccionadosMasivos() {
+    const selected = rrObtenerItemsSeleccionadosMasivos();
+    if (selected.length === 0) {
+        return showToast('Selecciona al menos un registro para compartir', 'warning');
+    }
+
+    const rutas = selected.map(i => i.imagen_ruta).filter(r => Boolean(r));
+    if (rutas.length === 0) {
+        return showToast('No hay comprobantes disponibles para compartir', 'warning');
+    }
+
+    try {
+        if (window.pywebview?.api?.compartir_archivos) {
+            const res = await window.pywebview.api.compartir_archivos(rutas);
+            if (res && res.status === 'success') {
+                return showToast(`Menú de compartir abierto con ${rutas.length} archivo(s)`, 'info');
+            }
+        }
+    } catch (e) {
+        console.warn('Error compartiendo lote masivo:', e);
+    }
+
+    // Fallback: copiar datos
+    rrCopiarSeleccionadosMasivos();
+}
+window.rrCompartirSeleccionadosMasivos = rrCompartirSeleccionadosMasivos;
+
+async function rrCopiarFilaMasivos(idx) {
+    if (!window.rrLoteMasivoActual?.items?.[idx]) return;
+    const item = window.rrLoteMasivoActual.items[idx];
+
+    if (item.imagen_ruta) {
+        try {
+            const res = await window.pywebview.api.copiar_imagen_portapapeles(item.imagen_ruta, item.imei, item.operador, item.estado || 'Registrado');
+            if (res && res.status === 'success') {
+                return showToast(`✓ Comprobante IMEI ${item.imei} copiado al portapapeles`, 'success');
+            }
+        } catch (e) {}
+    }
+
+    // Fallback texto
+    await navigator.clipboard.writeText(`IMEI: ${item.imei} | Modelo: ${item.modelo} | Operador: ${item.operador} | Estado: ${item.estado}`);
+    showToast(`Datos del IMEI ${item.imei} copiados`, 'info');
+}
+window.rrCopiarFilaMasivos = rrCopiarFilaMasivos;
+
+async function rrDescargarFilaMasivos(idx) {
+    if (!window.rrLoteMasivoActual?.items?.[idx]) return;
+    const item = window.rrLoteMasivoActual.items[idx];
+    const ruta = item.imagen_ruta;
+
+    if (!ruta) {
+        return showToast('No se encontró archivo de comprobante para este registro', 'warning');
+    }
+
+    try {
+        const filename = `Comprobante_${item.operador || 'Operador'}_${item.imei}.png`;
+        const res = await window.pywebview.api.guardar_imagen_declaracion(ruta, filename, item.imei, item.operador, item.estado || 'Registrado');
+        if (res && res.status === 'success') {
+            showToast(res.mensaje || 'Comprobante guardado en Descargas', 'file');
+        } else {
+            showToast(res?.mensaje || 'Error al guardar comprobante', 'error');
+        }
+    } catch (e) {
+        showToast('Error al descargar: ' + e, 'error');
+    }
+}
+window.rrDescargarFilaMasivos = rrDescargarFilaMasivos;
+
+async function rrCompartirFilaMasivos(idx) {
+    if (!window.rrLoteMasivoActual?.items?.[idx]) return;
+    const item = window.rrLoteMasivoActual.items[idx];
+    const ruta = item.imagen_ruta;
+
+    if (ruta) {
+        try {
+            if (window.pywebview?.api?.compartir_archivos) {
+                const res = await window.pywebview.api.compartir_archivos([ruta]);
+                if (res && res.status === 'success') {
+                    return showToast(`Menú de compartir abierto para IMEI ${item.imei}`, 'info');
+                }
+            }
+        } catch (e) {
+            console.warn('Error compartir fila:', e);
+        }
+    }
+
+    // Fallback copiar
+    rrCopiarFilaMasivos(idx);
+}
+window.rrCompartirFilaMasivos = rrCompartirFilaMasivos;
+
+function rrAbrirCarpetaLoteMasivo() {
+    const outDir = window.rrLoteMasivoActual?.out_dir;
+    if (outDir && window.pywebview?.api?.abrir_archivo) {
+        window.pywebview.api.abrir_archivo(outDir);
+    } else {
+        showToast('Ruta de carpeta no disponible', 'warning');
+    }
+}
+window.rrAbrirCarpetaLoteMasivo = rrAbrirCarpetaLoteMasivo;
