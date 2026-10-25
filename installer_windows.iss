@@ -52,6 +52,7 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\instalar_dependencias_windows.bat"; Description: "Instalar dependencias necesarias (Google Chrome y Tesseract OCR)"; Flags: runhidden postinstall skipifsilent; Tasks: installdeps
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Filename: "{app}\{#MyAppExeName}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\instalar_dependencias_windows.bat"; Description: "Instalar dependencias necesarias (Google Chrome y Tesseract OCR)"; Flags: shellexec runhidden postinstall skipifsilent; Tasks: installdeps
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
 
